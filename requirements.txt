@@ -1,0 +1,11 @@
+# Core runtime (works on dev machines and the Pi)
+flask>=3.0
+waitress>=3.0
+
+# Raspberry Pi GPIO (ships with Raspberry Pi OS Bookworm; listed for completeness).
+# Install on the Pi with:  pip install ".[pi]"
+#   gpiozero>=2.0
+#   lgpio>=0.2
+
+# Dev/test:  pip install ".[dev]"
+#   pytest>=8.0

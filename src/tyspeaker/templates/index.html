@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TySpeaker</title>
+  <style>
+    :root{
+      --bg:#090b17; --panel:#12172a; --panel2:#182033; --tool:#202942;
+      --line:#34405f; --fg:#f7fbff; --muted:#aebbe0; --soft:#dce7ff;
+      --accent:#ff7a18; --accent2:#25d9ff; --accent3:#7cff6b;
+      --good:#42d392; --danger:#ff4d74; --gold:#ffe66d; --button-fg:#101827;
+      --shadow:0 18px 40px rgba(0,0,0,.28);
+      color-scheme:dark;
+    }
+    body[data-theme="sunny"]{
+      --bg:#fff7df; --panel:#ffffff; --panel2:#f6ead1; --tool:#fdf1d6;
+      --line:#e3c789; --fg:#172033; --muted:#665b4b; --soft:#2e405f;
+      --accent:#ff6b35; --accent2:#168aad; --accent3:#51cf66;
+      --good:#2b9348; --danger:#d90429; --gold:#f9c74f; --button-fg:#101827;
+      color-scheme:light;
+    }
+    body[data-theme="arcade"]{
+      --bg:#10091f; --panel:#1b1232; --panel2:#241944; --tool:#2b1e52;
+      --line:#4c3d78; --fg:#fff8ff; --muted:#d6c7ff; --soft:#f1eaff;
+      --accent:#ff4fb3; --accent2:#36f1cd; --accent3:#ffe66d;
+      --good:#70e000; --danger:#ff4d6d; --gold:#ffe66d; --button-fg:#141022;
+    }
+    body[data-theme="forest"]{
+      --bg:#091914; --panel:#10241c; --panel2:#173127; --tool:#203d31;
+      --line:#3f6355; --fg:#f4fff8; --muted:#b9d7c8; --soft:#defbe9;
+      --accent:#ff9f1c; --accent2:#2ec4b6; --accent3:#a7c957;
+      --good:#7cff6b; --danger:#ff5a5f; --gold:#ffe66d; --button-fg:#102018;
+    }
+    body[data-theme="classic"]{
+      --bg:#0c0f15; --panel:#151a23; --panel2:#1b2230; --tool:#232c3a;
+      --line:#2a3342; --fg:#eaf0f8; --muted:#9aa8bd; --soft:#dbe6f6;
+      --accent:#ff7a18; --accent2:#46b4ff; --accent3:#41d18b;
+      --good:#41d18b; --danger:#ff5c6c; --gold:#ffcb45; --button-fg:#211100;
+    }
+    *{box-sizing:border-box}
+    [hidden]{display:none!important}
+    html{min-height:100%}
+    body{
+      margin:0; min-height:100vh; display:flex; color:var(--fg);
+      background:linear-gradient(135deg,var(--bg),color-mix(in srgb,var(--panel) 65%,#000 35%));
+      font:15px/1.45 system-ui,Segoe UI,Roboto,Arial,sans-serif; letter-spacing:0;
+    }
+    img{max-width:100%; display:block}
+    nav{
+      width:244px; flex:none; padding:16px 12px; background:color-mix(in srgb,var(--panel) 94%,#000 6%);
+      border-right:1px solid var(--line); display:flex; flex-direction:column; gap:10px;
+    }
+    .logo{height:auto; width:205px; margin:2px auto 8px}
+    .tab{
+      display:flex; align-items:center; gap:10px; min-height:44px; padding:10px 12px;
+      border:1px solid transparent; border-radius:8px; color:var(--muted);
+      background:transparent; cursor:pointer; font-weight:800;
+    }
+    .tab:hover,.tab.active{background:var(--panel2); color:var(--fg); border-color:var(--line)}
+    .tab.active{box-shadow:inset 4px 0 0 var(--accent)}
+    .tabIcon{
+      width:24px; height:24px; border-radius:7px; display:grid; place-items:center;
+      background:linear-gradient(135deg,var(--accent),var(--accent2)); color:var(--button-fg);
+      font-size:13px; font-weight:900;
+    }
+    .navTools{padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--panel2)}
+    .navTools label{display:flex; flex-direction:column; gap:6px; color:var(--muted); font-size:12px; font-weight:800}
+    .navTools select{width:100%}
+    .miniGallery{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px}
+    .miniGallery img{height:76px; width:100%; border-radius:8px; object-fit:cover; border:1px solid var(--line)}
+    nav .spacer{flex:1}
+    nav .status{font-size:12px; color:var(--muted); padding:10px; border-top:1px solid var(--line)}
+
+    main{flex:1; overflow:auto; padding:24px; max-width:1180px}
+    h1,h2,h3{margin:0; line-height:1.1; letter-spacing:0}
+    h2{font-size:26px}
+    h3{font-size:17px}
+    .sub{color:var(--muted); margin:6px 0 18px}
+    .panel{display:none}
+    .panel.active{display:block}
+    .titleRow{display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:14px}
+    .titleText{min-width:0}
+    .titleArt{display:flex; gap:10px; flex:none}
+    .titleArt img{width:74px; height:74px; object-fit:cover; border-radius:10px; border:1px solid var(--line); box-shadow:var(--shadow)}
+    .toolPanel,.drop,.sectionBox,.item{
+      background:color-mix(in srgb,var(--panel2) 90%,#000 10%);
+      border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow);
+    }
+    .toolPanel{padding:15px; margin-bottom:16px}
+    .row{display:flex; align-items:center; gap:10px}
+    .grow{flex:1}
+    button,select,input[type=text],input[type=number]{
+      font:inherit; color:var(--fg); background:var(--tool); border:1px solid var(--line);
+      border-radius:8px; padding:8px 11px; min-height:38px;
+    }
+    select{cursor:pointer}
+    button{cursor:pointer; font-weight:800}
+    button:hover,select:hover,input:hover{border-color:var(--accent2)}
+    button.primary{
+      color:var(--button-fg); border:none;
+      background:linear-gradient(90deg,var(--accent),var(--gold)); font-weight:900;
+    }
+    button.blue{color:#071724; border:none; background:linear-gradient(90deg,var(--accent2),var(--accent3)); font-weight:900}
+    button.ghost{background:transparent}
+    button.danger:hover{border-color:var(--danger); color:var(--danger)}
+    .pill{
+      display:inline-flex; align-items:center; justify-content:center; min-height:26px;
+      font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line);
+      color:var(--muted); background:color-mix(in srgb,var(--panel) 80%,#000 20%);
+      white-space:nowrap;
+    }
+    .pill.on{color:var(--good); border-color:var(--good)}
+    .pill.warn{color:var(--gold); border-color:var(--gold)}
+
+    .transportGrid{display:grid; grid-template-columns:minmax(260px,1fr) auto; gap:16px; align-items:center}
+    .now{display:grid; grid-template-columns:14px 1fr; gap:10px; align-items:center; min-width:0}
+    .dot{width:12px; height:12px; border-radius:50%; background:var(--muted)}
+    .now.playing .dot{background:var(--accent); box-shadow:0 0 14px var(--accent)}
+    .nowText{font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .timer{grid-column:1 / -1; margin-top:10px; display:grid; grid-template-columns:74px 1fr; gap:10px; align-items:center}
+    .timerText{font-weight:900; color:var(--gold); font-variant-numeric:tabular-nums}
+    .timerTrack{height:14px; border-radius:999px; background:color-mix(in srgb,var(--tool) 85%,#000 15%); overflow:hidden; border:1px solid var(--line)}
+    .timerBar{height:100%; width:0%; background:linear-gradient(90deg,var(--accent2),var(--accent3),var(--gold)); transition:width .2s linear}
+    .transportActions{display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-end}
+    .volumeRow{display:flex; align-items:center; gap:8px; min-width:210px}
+    input[type=range]{accent-color:var(--accent); width:150px}
+    .drop{
+      padding:22px; text-align:center; color:var(--muted); cursor:pointer; transition:.15s;
+      background:linear-gradient(135deg,color-mix(in srgb,var(--panel2) 86%,#000 14%),color-mix(in srgb,var(--accent2) 12%,var(--panel2)));
+      margin-bottom:12px;
+    }
+    .drop strong{color:var(--fg); font-size:17px}
+    .drop.hover{border-color:var(--accent); color:var(--fg)}
+    ul.list{list-style:none; margin:0; padding:0}
+    .item{display:flex; align-items:center; gap:10px; padding:10px 12px; margin-top:8px}
+    .item.drag{opacity:.45}
+    .item.sel{border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 35%,transparent)}
+    .handle{cursor:grab; color:var(--muted); font-weight:900}
+    .idx{width:26px; text-align:center; color:var(--muted); font-variant-numeric:tabular-nums}
+    .nm{flex:1; min-width:0; word-break:break-word; font-weight:800}
+    .nm .meta{color:var(--muted); font-size:12px; margin-left:8px; font-weight:700}
+    .empty{color:var(--muted); padding:20px; text-align:center}
+    .badges{display:flex; gap:6px; flex-wrap:wrap}
+    .btSummary{margin-top:12px; color:var(--muted); font-weight:700}
+    .btSummary strong{color:var(--fg)}
+    .btHint{display:block; margin-top:4px; color:var(--soft); font-size:13px}
+    .btActions{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+    .btStateText{display:block; color:var(--muted); font-size:13px; font-weight:700; margin-top:3px}
+    button:disabled{opacity:.45; cursor:not-allowed}
+    .speakerCard{display:grid; grid-template-columns:1fr auto; gap:16px; align-items:center; padding:18px; margin-bottom:16px}
+    .speakerName{font-size:22px; font-weight:900; margin-bottom:6px}
+    .speakerBigState{font-size:16px; color:var(--soft); font-weight:800}
+    .speakerBigState.ready{color:var(--good)}
+    .speakerBigState.wait{color:var(--gold)}
+    .speakerControls{display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end}
+    .speakerSteps{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-bottom:16px}
+    .speakerStep{padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--tool); color:var(--muted); font-weight:800}
+    .speakerStep strong{display:block; color:var(--fg); margin-bottom:3px}
+    .advancedBt{margin-top:10px}
+
+    .mediaBand{display:grid; grid-template-columns:1.1fr .9fr; gap:16px; align-items:stretch; margin-bottom:16px}
+    .featurePhoto{min-height:190px; border-radius:10px; overflow:hidden; border:1px solid var(--line); box-shadow:var(--shadow); background:var(--panel2)}
+    .featurePhoto img{width:100%; height:100%; object-fit:cover}
+    .quickTips{padding:18px; border-left:6px solid var(--accent); background:var(--panel2); border-radius:8px}
+    .quickTips p{margin:8px 0 0; color:var(--muted)}
+
+    label.fld{display:flex; flex-direction:column; gap:5px; font-size:13px; color:var(--muted); font-weight:800; margin-bottom:12px}
+    label.fld input,label.fld select{color:var(--fg); font-weight:600}
+    .settingsGrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px; align-items:start}
+    .sectionBox{padding:15px}
+    .sectionBox .mini{font-size:13px; color:var(--muted); margin-top:5px}
+    details.sectionBox summary{cursor:pointer; color:var(--fg); font-weight:900; font-size:17px}
+    details.sectionBox[open] summary{margin-bottom:12px}
+    .choice{display:grid; grid-template-columns:1fr; gap:9px; margin:12px 0 14px}
+    .choice label{
+      display:flex; align-items:center; gap:9px; min-height:46px; padding:10px;
+      background:var(--tool); border:1px solid var(--line); border-radius:8px;
+      color:var(--fg); cursor:pointer; font-weight:800;
+    }
+    .choice input{accent-color:var(--accent)}
+    .wireGrid{display:grid; grid-template-columns:minmax(290px,1fr) minmax(250px,360px); gap:16px; align-items:start}
+    .wireHint{margin-top:10px; padding:10px; border-radius:8px; border:1px solid var(--accent2); background:color-mix(in srgb,var(--accent2) 12%,var(--panel) 88%); color:var(--soft); font-size:13px}
+    .wireHint strong{color:var(--fg)}
+    .pinoutFrame{background:#f3fbff; border-radius:10px; padding:8px; border:1px solid var(--line)}
+    .pinoutFrame img{border-radius:8px}
+    .smallPhotos{display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:12px}
+    .smallPhotos img{height:104px; object-fit:cover; border-radius:8px; border:1px solid var(--line)}
+    .diagGrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-top:14px}
+    .diagCard{background:var(--tool); border:1px solid var(--line); border-radius:8px; padding:12px}
+    .diagCard h3{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:16px; margin-bottom:10px}
+    .diagRows{display:grid; gap:8px}
+    .diagRow{display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:28px; color:var(--muted); font-size:13px}
+    .diagValue{color:var(--fg); font-weight:900; text-align:right; word-break:break-word}
+    .diagLamp{width:12px; height:12px; border-radius:999px; background:var(--muted); box-shadow:0 0 0 3px color-mix(in srgb,var(--muted) 20%,transparent)}
+    .diagLamp.on{background:var(--good); box-shadow:0 0 16px color-mix(in srgb,var(--good) 70%,transparent)}
+    .diagLamp.warn{background:var(--gold); box-shadow:0 0 16px color-mix(in srgb,var(--gold) 65%,transparent)}
+    .diagEvents{max-height:180px; overflow:auto; display:grid; gap:6px}
+    .diagEvent{padding:7px 9px; border-radius:7px; background:color-mix(in srgb,var(--panel) 70%,#000 30%); color:var(--soft); font-size:12px}
+    .diagEventTime{color:var(--muted); margin-right:8px; font-variant-numeric:tabular-nums}
+    .diagFlash{animation:diagFlash .5s ease}
+    @keyframes diagFlash{0%{outline:2px solid var(--accent2)}100%{outline:2px solid transparent}}
+    .btLogPanel{margin-top:16px}
+    .btLogBox{
+      max-height:390px; overflow:auto; margin:10px 0 0; padding:12px;
+      background:#050713; border:1px solid var(--line); border-radius:8px;
+      color:var(--soft); font:12px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;
+      white-space:pre-wrap; overflow-wrap:anywhere;
+    }
+    .btLogControls{flex-wrap:wrap}
+    .btLogHint{margin:6px 0 0; color:var(--muted); font-size:13px}
+    .toast{
+      position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+      background:#000c; border:1px solid var(--line); padding:10px 16px; border-radius:10px;
+      opacity:0; transition:.2s; pointer-events:none; z-index:9; color:white;
+    }
+    .toast.show{opacity:1}
+
+    @media (max-width:850px){
+      body{display:block}
+      nav{width:auto; border-right:none; border-bottom:1px solid var(--line)}
+      .logo{width:190px; margin-left:0}
+      .miniGallery{display:none}
+      main{padding:18px}
+      .titleRow,.mediaBand,.transportGrid,.wireGrid{display:block}
+      .titleArt{margin-top:10px}
+      .transportActions{justify-content:flex-start; margin-top:14px}
+      .timer{grid-template-columns:66px 1fr}
+      .settingsGrid{grid-template-columns:1fr}
+      .smallPhotos img{height:88px}
+    }
+  </style>
+</head>
+<body data-theme="neon">
+  <nav>
+    <img class="logo" src="/static/tyspeaker-logo.svg" alt="TySpeaker logo">
+    <button class="tab active" data-tab="player" type="button"><span class="tabIcon">P</span> Ty Player</button>
+    <button class="tab" data-tab="bt" type="button"><span class="tabIcon">B</span> Bluetooth</button>
+    <button class="tab" data-tab="config" type="button"><span class="tabIcon">S</span> Settings</button>
+    <div class="navTools">
+      <label>Theme
+        <select id="themeSel" onchange="saveTheme(this.value)">
+          <option value="neon">Neon buttons</option>
+          <option value="sunny">Sunny day</option>
+          <option value="arcade">Arcade</option>
+          <option value="forest">Forest</option>
+          <option value="classic">Classic dark</option>
+        </select>
+      </label>
+      <div class="miniGallery" aria-hidden="true">
+        <img src="/static/gallery/ty-portrait.jpg" alt="">
+        <img src="/static/gallery/water-blaster.png" alt="">
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="status" id="navStatus">--</div>
+  </nav>
+
+  <main>
+    <section class="panel active" id="panel-player">
+      <div class="titleRow">
+        <div class="titleText">
+          <h2>Ty Player</h2>
+          <p class="sub">Drop sounds, drag them into order, and press play.</p>
+          <div class="statusPills">
+            <span id="spkStatusPlayer" class="spkPill spkUnknown">Speaker: checking...</span>
+            <span id="powerStatusPlayer" class="spkPill powerPill spkUnknown">Battery: checking...</span>
+          </div>
+        </div>
+        <div class="titleArt" aria-hidden="true">
+          <img src="/static/gallery/water-blaster.png" alt="">
+          <img src="/static/gallery/stone-photo.jpg" alt="">
+        </div>
+      </div>
+
+      <div class="toolPanel">
+        <div class="transportGrid">
+          <div>
+            <div class="now" id="now">
+              <span class="dot"></span>
+              <span class="nowText" id="nowText">Idle</span>
+            </div>
+            <div class="timer">
+              <span class="timerText" id="timerText">--:--</span>
+              <div class="timerTrack" aria-label="Playback timer">
+                <div class="timerBar" id="timerBar"></div>
+              </div>
+            </div>
+          </div>
+          <div class="transportActions">
+            <button class="primary" onclick="playNext()" type="button">Next</button>
+            <button class="ghost" onclick="stopPlay()" type="button">Stop</button>
+            <button id="modeBtn" class="ghost" onclick="toggleMode()" type="button">Sequential</button>
+            <div class="volumeRow">
+              <span class="pill">Volume</span>
+              <input type="range" min="0" max="100" id="vol" oninput="setVol(this.value)">
+              <span id="volLbl" class="pill">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mediaBand">
+        <div class="drop" id="drop">
+          <strong>Drop audio files here</strong>
+          <div>or click to choose mp3, wav, ogg, flac, m4a, aac, or opus</div>
+          <input id="file" type="file" multiple accept="audio/*" hidden>
+        </div>
+        <div class="quickTips">
+          <h3>How the knob works</h3>
+          <p><strong>Tap</strong> = play this sound. <strong>Hold</strong> = next sound. <strong>Double-tap</strong> = surprise! <strong>Turn</strong> = volume (or browse sounds — set under Knob job in Settings).</p>
+        </div>
+      </div>
+
+      <ul class="list" id="list"></ul>
+    </section>
+
+    <section class="panel" id="panel-bt">
+      <div class="titleRow">
+        <div class="titleText">
+          <h2>Bluetooth</h2>
+          <p class="sub">Connect the speaker and keep it ready for TySpeaker.</p>
+          <span id="spkStatusBt" class="spkPill spkUnknown">Speaker: checking…</span>
+        </div>
+        <div class="titleArt" aria-hidden="true">
+          <img src="/static/gallery/family-walk.jpg" alt="">
+          <img src="/static/gallery/water-blaster.png" alt="">
+        </div>
+      </div>
+
+      <div class="toolPanel speakerCard">
+        <div>
+          <div class="speakerName" id="speakerName">Insignia speaker</div>
+          <div class="speakerBigState" id="speakerBigState">Checking...</div>
+          <div id="btSummary" class="btSummary">Checking speaker...</div>
+        </div>
+        <div class="speakerControls">
+          <button class="blue" id="scanBtn" onclick="btScan()" type="button">Find speaker</button>
+          <button class="primary" id="setupBtn" onclick="btSetup()" type="button" disabled>Pair and connect</button>
+          <button class="ghost danger" id="forgetBtn" onclick="btForget()" type="button" disabled>Start over</button>
+        </div>
+      </div>
+
+      <div class="speakerSteps">
+        <div class="speakerStep"><strong>1. Speaker</strong>Hold its button until it blinks.</div>
+        <div class="speakerStep"><strong>2. Find</strong>Tap Find speaker.</div>
+        <div class="speakerStep"><strong>3. Ready</strong>Tap Pair and connect.</div>
+      </div>
+
+      <details class="sectionBox advancedBt">
+        <summary>Advanced Bluetooth details</summary>
+        <div class="row" style="margin-top:12px; flex-wrap:wrap">
+          <span id="btState" class="pill">checking...</span>
+          <button class="ghost" onclick="btPower(true)" type="button">Power On</button>
+          <button class="ghost" onclick="btPower(false)" type="button">Power Off</button>
+        </div>
+        <ul class="list" id="btList"><li class="empty">--</li></ul>
+      </details>
+
+      <div class="toolPanel" style="margin-top:16px">
+        <div class="row">
+          <strong>Audio output</strong>
+          <span class="grow"></span>
+          <select id="sinkSel"><option value="">(default)</option></select>
+          <button class="ghost" onclick="setSink()" type="button">Set output</button>
+          <button class="ghost" onclick="loadSinks()" type="button">Refresh</button>
+        </div>
+        <p class="sub" id="sinkInfo" style="margin:8px 0 0"></p>
+      </div>
+
+      <div class="toolPanel btLogPanel">
+        <div class="row btLogControls">
+          <strong>Live Bluetooth logs</strong>
+          <span id="btLogMeta" class="pill">starting...</span>
+          <span class="grow"></span>
+          <button class="ghost" id="btLogPauseBtn" onclick="toggleBtLogPause()" type="button">Pause</button>
+          <button class="ghost" onclick="loadBtLogs(true)" type="button">Refresh logs</button>
+        </div>
+        <p class="btLogHint">BlueZ, WirePlumber, PipeWire, A2DP endpoint, transport, speaker connect, and TySpeaker events refresh here every second.</p>
+        <pre id="btLogBox" class="btLogBox">loading...</pre>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-config">
+      <div class="titleRow">
+        <div class="titleText">
+          <h2>Settings</h2>
+          <p class="sub">Simple controls for how TySpeaker looks and plays.</p>
+        </div>
+        <div class="titleArt" aria-hidden="true">
+          <img src="/static/gallery/ty-portrait.jpg" alt="">
+          <img src="/static/gallery/family-walk.jpg" alt="">
+        </div>
+      </div>
+
+      <div class="settingsGrid">
+        <div class="sectionBox">
+          <h3>Song order</h3>
+          <div class="mini">Pick what the button does after a sound plays.</div>
+          <div class="choice">
+            <label><input type="radio" name="k_mode" value="sequential"> Go down the list</label>
+            <label><input type="radio" name="k_mode" value="random"> Surprise me</label>
+          </div>
+          <label class="fld">How loud?
+            <input type="range" id="k_volume" min="0" max="100" oninput="$('k_volume_lbl').textContent=this.value+'%'">
+          </label>
+          <span id="k_volume_lbl" class="pill">--</span>
+        </div>
+
+        <div class="sectionBox">
+          <h3>Look</h3>
+          <div class="mini">Pick the colors for the app.</div>
+          <label class="fld">Theme
+            <select id="k_theme" onchange="applyTheme(this.value)">
+              <option value="neon">Neon buttons</option>
+              <option value="sunny">Sunny day</option>
+              <option value="arcade">Arcade</option>
+              <option value="forest">Forest</option>
+              <option value="classic">Classic dark</option>
+            </select>
+          </label>
+          <div class="smallPhotos" aria-hidden="true">
+            <img src="/static/gallery/water-blaster.png" alt="">
+            <img src="/static/gallery/stone-photo.jpg" alt="">
+          </div>
+        </div>
+
+        <div class="sectionBox">
+          <h3>Knob job</h3>
+          <div class="mini">Choose what turning the knob changes.</div>
+          <div class="choice">
+            <label><input type="radio" name="k_encoder_role" value="select"> Pick a sound</label>
+            <label><input type="radio" name="k_encoder_role" value="volume"> Change loudness</label>
+          </div>
+        </div>
+      </div>
+
+      <details class="sectionBox" open>
+        <summary>Button wires</summary>
+        <div class="wireGrid">
+          <div>
+            <div class="mini">Type BCM GPIO numbers here, not the physical pin number on the 40-pin header. Wire changes need a restart.</div>
+            <div class="wireHint"><strong>Your EC11 wiring:</strong> A on physical pin 29 = enter GPIO5. B on physical pin 31 = enter GPIO6. C goes to physical pin 30 GND. If the knob push is on physical pin 33, enter GPIO13.</div>
+            <div class="settingsGrid" style="margin-top:14px">
+              <label class="fld">Knob A wire (BCM GPIO)
+                <input type="number" id="k_encoder_clk" placeholder="5"></label>
+              <label class="fld">Knob B wire (BCM GPIO)
+                <input type="number" id="k_encoder_dt" placeholder="6"></label>
+              <label class="fld">Knob push wire (BCM GPIO)
+                <input type="number" id="k_encoder_sw" placeholder="13"></label>
+              <label class="fld">Tiny beep wire (BCM GPIO)
+                <input type="number" id="k_piezo_pin" placeholder="-1"></label>
+            </div>
+          </div>
+          <div class="pinoutFrame">
+            <img src="/static/pi-zero-2w-pinout.svg" alt="Raspberry Pi Zero 2 W pinout showing button wire from GPIO17 pin 11 to ground pin 9">
+          </div>
+        </div>
+      </details>
+
+      <details class="sectionBox" open>
+        <summary>Diagnostics</summary>
+        <div class="mini">Use this while wiring. Turn the knob and press the button; the numbers should change right away.</div>
+        <div class="row" style="margin-top:12px; flex-wrap:wrap">
+          <span id="diagInputsActive" class="pill">inputs: --</span>
+          <span id="diagGpioActive" class="pill">gpio: --</span>
+          <button class="ghost" onclick="loadInputDiagnostics()" type="button">Refresh</button>
+          <button class="blue" onclick="testBeep()" type="button">Test beep</button>
+          <button class="ghost" onclick="toggleLogs()" type="button" id="logsBtn">Show logs</button>
+        </div>
+        <div id="logWrap" style="display:none; margin-top:12px">
+          <div class="mini">Live app log (newest at bottom). Same as <code>journalctl -u tyspeaker</code>.</div>
+          <pre id="logBox" style="max-height:300px; overflow:auto; background:#0d121c; border:1px solid #2a3342; border-radius:10px; padding:10px; font-size:12px; white-space:pre-wrap; margin-top:8px">loading…</pre>
+        </div>
+        <div class="diagGrid" id="diagPanel">
+          <div class="diagCard">
+            <h3>Knob <span id="diagEncoderLamp" class="diagLamp"></span></h3>
+            <div class="diagRows">
+              <div class="diagRow"><span>BCM pins</span><span id="diagEncoderPins" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Started</span><span id="diagEncoderStarted" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Position</span><span id="diagEncoderSteps" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Debounce</span><span id="diagEncoderBounce" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Right turns</span><span id="diagEncoderCw" class="diagValue">0</span></div>
+              <div class="diagRow"><span>Left turns</span><span id="diagEncoderCcw" class="diagValue">0</span></div>
+              <div class="diagRow"><span>Last turn</span><span id="diagEncoderLast" class="diagValue">--</span></div>
+            </div>
+          </div>
+          <div class="diagCard">
+            <h3>Button <span id="diagButtonLamp" class="diagLamp"></span></h3>
+            <div class="diagRows">
+              <div class="diagRow"><span>BCM pin</span><span id="diagButtonPin" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Started</span><span id="diagButtonStarted" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Now</span><span id="diagButtonPressed" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Debounce</span><span id="diagButtonBounce" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Presses</span><span id="diagButtonPresses" class="diagValue">0</span></div>
+              <div class="diagRow"><span>Short clicks</span><span id="diagButtonShort" class="diagValue">0</span></div>
+              <div class="diagRow"><span>Double clicks</span><span id="diagButtonDouble" class="diagValue">0</span></div>
+              <div class="diagRow"><span>Holds</span><span id="diagButtonHeld" class="diagValue">0</span></div>
+              <div class="diagRow"><span>Last button</span><span id="diagButtonLast" class="diagValue">--</span></div>
+            </div>
+          </div>
+          <div class="diagCard">
+            <h3>Live events</h3>
+            <div class="diagEvents" id="diagEvents">
+              <div class="diagEvent">No events yet.</div>
+            </div>
+          </div>
+        </div>
+        <div id="diagErrors" class="mini" style="margin-top:12px"></div>
+      </details>
+
+      <details class="sectionBox">
+        <summary>Click timing</summary>
+        <div class="mini">Use bigger debounce numbers if one press or one click shows up many times.</div>
+        <div class="settingsGrid" style="margin-top:14px">
+          <label class="fld">Double-click speed
+            <input type="number" id="k_double_click_ms"></label>
+          <label class="fld">Hold-button time
+            <input type="number" id="k_long_press_ms"></label>
+          <label class="fld">Button debounce (ms)
+            <input type="number" id="k_button_bounce_ms" min="0"></label>
+          <label class="fld">Knob debounce (ms)
+            <input type="number" id="k_encoder_bounce_ms" min="0"></label>
+        </div>
+      </details>
+
+      <details class="sectionBox">
+        <summary>Parent audio setup</summary>
+        <div class="settingsGrid" style="margin-top:14px">
+          <label class="fld">Player command
+            <input type="text" id="k_player_cmd" placeholder="mpv --no-video {path}"></label>
+          <label class="fld">Audio output name
+            <input type="text" id="k_default_sink" placeholder="(sink name/id)"></label>
+        </div>
+      </details>
+
+      <div class="row" style="margin-top:14px">
+        <button class="primary" onclick="saveConfig()" type="button">Save settings</button>
+        <span class="grow"></span>
+        <span id="cfgMeta" class="pill">--</span>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <style>
+    .spkPill{display:inline-block;margin-top:8px;padding:5px 12px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid transparent}
+    .spkOn{background:rgba(34,197,94,.15);color:#4ade80;border-color:rgba(34,197,94,.5)}
+    .spkOff{background:rgba(239,68,68,.15);color:#f87171;border-color:rgba(239,68,68,.5)}
+    .spkUnknown{background:rgba(148,163,184,.15);color:#94a3b8;border-color:rgba(148,163,184,.4)}
+    .statusPills{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .powerPill{border-color:rgba(255,230,109,.55)}
+    .powerOk{background:rgba(255,230,109,.15);color:#fde68a;border-color:rgba(255,230,109,.55)}
+    .modalBg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
+    .modalCard{background:#1b2230;border:1px solid #2a3342;border-radius:14px;padding:22px 24px;max-width:420px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+    .modalCard h3{margin:0 0 8px;font-size:20px}
+    .modalCard p{margin:0 0 16px;color:#8a97a8}
+    .modalCard .row{justify-content:center;gap:12px}
+  </style>
+
+  <div class="modalBg" id="rebootModal">
+    <div class="modalCard">
+      <h3>Reboot needed</h3>
+      <p id="rebootMsg">Some changes need a restart to take effect.</p>
+      <div class="row">
+        <button class="primary" onclick="doReboot()" type="button">Reboot now</button>
+        <button class="ghost" onclick="hideReboot()" type="button">Later</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modalBg" id="rebootOverlay">
+    <div class="modalCard">
+      <h3>Rebooting TySpeaker...</h3>
+      <p id="rebootStatus">This takes about a minute. The page will reconnect automatically.</p>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const THEMES = ["neon","sunny","arcade","forest","classic"];
+    const toast = (m) => {
+      const t = $("toast");
+      t.textContent = m;
+      t.classList.add("show");
+      clearTimeout(t._t);
+      t._t = setTimeout(() => t.classList.remove("show"), 2400);
+    };
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, ch => ({
+      "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+    }[ch]));
+    const fmtSize = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : n >= 1024 ? (n / 1024).toFixed(0) + " KB" : n + " B";
+    const fmtTime = (seconds) => {
+      if (!Number.isFinite(seconds) || seconds < 0) return "--:--";
+      const s = Math.max(0, Math.ceil(seconds));
+      const m = Math.floor(s / 60);
+      return m + ":" + String(s % 60).padStart(2, "0");
+    };
+    const hasDuration = (value) => value !== null && value !== undefined && Number.isFinite(+value) && +value > 0;
+
+    async function api(url, body){
+      const opts = body === undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)};
+      const r = await fetch(url, opts);
+      let j = {};
+      try{ j = await r.json(); }catch(e){}
+      if(!r.ok) throw new Error(j.error || j.message || ("HTTP " + r.status));
+      return j;
+    }
+
+    function safeTheme(theme){ return THEMES.includes(theme) ? theme : "neon"; }
+    function applyTheme(theme){
+      const t = safeTheme(theme);
+      document.body.dataset.theme = t;
+      if($("themeSel")) $("themeSel").value = t;
+      if($("k_theme")) $("k_theme").value = t;
+    }
+    async function saveTheme(theme){
+      const t = safeTheme(theme);
+      applyTheme(t);
+      try{ await api("/api/settings", {theme:t}); }
+      catch(e){ toast(e.message); }
+    }
+
+    function showTab(name){
+      if(!["player","bt","config"].includes(name)) name = "player";
+      document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+      document.querySelector(`.tab[data-tab="${name}"]`).classList.add("active");
+      $("panel-" + name).classList.add("active");
+      if(name === "bt"){
+        loadBt();
+        startBtLogs();
+      } else {
+        stopBtLogs();
+      }
+      if(name === "config"){
+        loadConfig();
+        startInputDiagnostics();
+      } else {
+        stopInputDiagnostics();
+      }
+    }
+    document.querySelectorAll(".tab").forEach(t => t.onclick = () => showTab(t.dataset.tab));
+
+    let playlist = [];
+    let dragI = null;
+    const timer = {rel:null, total:null, elapsed:0, syncAt:0, tick:null};
+
+    function durationForRel(rel){
+      const entry = playlist.find(e => e.rel_path === rel);
+      return entry && hasDuration(entry.duration) ? +entry.duration : null;
+    }
+    function renderTimer(){
+      if(!timer.rel || !timer.total){
+        $("timerText").textContent = "--:--";
+        $("timerBar").style.width = "0%";
+        return;
+      }
+      const elapsed = timer.elapsed + ((Date.now() - timer.syncAt) / 1000);
+      const remaining = Math.max(0, timer.total - elapsed);
+      const pct = Math.max(0, Math.min(100, (elapsed / timer.total) * 100));
+      $("timerText").textContent = fmtTime(remaining);
+      $("timerBar").style.width = pct + "%";
+    }
+    function syncTimer(d){
+      const rel = d.now_playing_rel || "";
+      if(!rel){
+        timer.rel = null;
+        timer.total = null;
+        timer.elapsed = 0;
+        timer.syncAt = Date.now();
+        renderTimer();
+        return;
+      }
+      const duration = hasDuration(d.now_playing_duration) ? +d.now_playing_duration : durationForRel(rel);
+      if(!duration){
+        timer.rel = rel;
+        timer.total = null;
+        $("timerText").textContent = "play";
+        $("timerBar").style.width = "0%";
+        return;
+      }
+      timer.rel = rel;
+      timer.total = duration;
+      timer.elapsed = Number.isFinite(+d.now_playing_elapsed) ? +d.now_playing_elapsed : 0;
+      timer.syncAt = Date.now();
+      renderTimer();
+      if(!timer.tick) timer.tick = setInterval(renderTimer, 250);
+    }
+
+    function setPowerPill(power){
+      const el = $("powerStatusPlayer");
+      if(!el) return;
+      let txt = "Battery: status unknown";
+      let cls = "spkPill powerPill spkUnknown";
+      if(power){
+        const pct = Number(power.percent);
+        const volts = Number(power.voltage);
+        if(power.percent_supported && Number.isFinite(pct)){
+          txt = "Battery: " + Math.round(pct) + "%";
+          cls = "spkPill powerPill powerOk";
+        } else if(power.voltage_supported && Number.isFinite(volts)){
+          txt = "Battery: " + volts.toFixed(2) + " V";
+          cls = "spkPill powerPill powerOk";
+        } else {
+          txt = "Battery: UPS installed (no meter)";
+          cls = "spkPill powerPill powerOk";
+        }
+        el.title = power.summary || "";
+      }
+      el.textContent = txt;
+      el.className = cls;
+    }
+
+    async function refresh(){
+      let d;
+      try{ d = await api("/api/playlist"); }catch(e){ return; }
+      playlist = d.entries || [];
+      $("now").classList.toggle("playing", !!d.now_playing);
+      $("nowText").textContent = d.now_playing ? ("Playing: " + d.now_playing) : "Idle";
+      $("modeBtn").textContent = d.mode === "random" ? "🔀 Shuffle: On" : "🔀 Shuffle: Off";
+      $("modeBtn").classList.toggle("on", d.mode === "random");
+      $("vol").value = d.volume;
+      $("volLbl").textContent = d.volume + "%";
+      $("navStatus").textContent = `${d.count} sounds / ${d.player_name || "no player"}` + (d.mixer_backend ? ` / ${d.mixer_backend}` : "");
+      setPowerPill(d.power);
+      syncTimer(d);
+
+      const ul = $("list");
+      if(!playlist.length){
+        ul.innerHTML = `<li class="empty">No sounds yet. Drop some audio files above.</li>`;
+        return;
+      }
+      ul.innerHTML = playlist.map((e, i) => {
+        const dur = hasDuration(e.duration) ? ` / ${fmtTime(+e.duration)}` : "";
+        return `<li class="item ${i === d.selection ? "sel" : ""}" draggable="true" data-i="${i}">
+          <span class="handle">::</span><span class="idx">${i + 1}</span>
+          <span class="nm">${esc(e.name)}<span class="meta">${fmtSize(e.size)}${dur}</span></span>
+          <button class="primary" onclick="playIdx(${i})" type="button">Play</button>
+          <button class="ghost danger" onclick="removeItem('${encodeURIComponent(e.rel_path)}')" type="button">Remove</button>
+        </li>`;
+      }).join("");
+      wireDrag();
+    }
+    async function playIdx(i){ try{ await api("/api/play", {index:i}); await refresh(); }catch(e){ toast(e.message); } }
+    async function playNext(){ try{ await api("/api/next", {}); await refresh(); }catch(e){ toast(e.message); } }
+    async function stopPlay(){ try{ await api("/api/stop", {}); await refresh(); }catch(e){ toast(e.message); } }
+    async function removeItem(rel){
+      const p = decodeURIComponent(rel);
+      if(!confirm("Remove and delete '" + p + "'?")) return;
+      try{ await api("/api/playlist/remove", {path:p, delete:true}); await refresh(); }catch(e){ toast(e.message); }
+    }
+    async function toggleMode(){
+      const cur = $("modeBtn").textContent.includes("On") ? "random" : "sequential";
+      await api("/api/mode", {mode:cur === "random" ? "sequential" : "random"});
+      refresh();
+    }
+    let volT;
+    function setVol(v){
+      $("volLbl").textContent = v + "%";
+      clearTimeout(volT);
+      volT = setTimeout(() => api("/api/volume", {level:+v}), 150);
+    }
+    function wireDrag(){
+      [...document.querySelectorAll("#list .item")].forEach(li => {
+        li.ondragstart = () => { dragI = +li.dataset.i; li.classList.add("drag"); };
+        li.ondragend = () => li.classList.remove("drag");
+        li.ondragover = (e) => e.preventDefault();
+        li.ondrop = (e) => {
+          e.preventDefault();
+          const to = +li.dataset.i;
+          if(dragI === null || dragI === to) return;
+          const order = playlist.map(x => x.rel_path);
+          const moved = order.splice(dragI, 1)[0];
+          order.splice(to, 0, moved);
+          api("/api/playlist/reorder", {order}).then(refresh).catch(err => toast(err.message));
+        };
+      });
+    }
+
+    const drop = $("drop");
+    drop.onclick = () => $("file").click();
+    $("file").onchange = (e) => { upload(e.target.files); e.target.value = ""; };
+    ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hover"); }));
+    ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hover"); }));
+    drop.addEventListener("drop", e => upload(e.dataTransfer.files));
+    async function upload(files){
+      if(!files.length) return;
+      const fd = new FormData();
+      [...files].forEach(f => fd.append("file", f));
+      try{
+        const r = await fetch("/api/upload", {method:"POST", body:fd});
+        const j = await r.json();
+        if(j.errors && j.errors.length) toast(j.errors.map(e => e.name + ": " + e.error).join("; "));
+        else toast("Uploaded " + j.saved.length + " file(s)");
+        refresh();
+      }catch(e){ toast("Upload failed"); }
+    }
+
+    let btAutoMac = "";
+    let btTarget = null;
+    const btKnownMacs = ["08:EB:ED:0D:1D:BF", "9D:31:DA:AD:24:69"];
+    const btKnownNames = ["NS-CSPBT03", "INSIGNIA", "SONIX BLUETOOTH SPEAKER"];
+    const btFallbackMac = "9D:31:DA:AD:24:69";
+
+    function isMacLikeName(name){
+      return /^[0-9A-F]{2}(-[0-9A-F]{2}){5}$/i.test(name || "");
+    }
+    function isSpeaker(x){
+      const mac = (x.mac || "").toUpperCase();
+      const name = (x.name || "").toUpperCase();
+      return btKnownMacs.includes(mac) ||
+        btKnownNames.some(n => name.includes(n)) ||
+        (name.includes("BLUETOOTH SPEAKER") && !isMacLikeName(name));
+    }
+    function chooseSpeaker(devices){
+      // Truth first: what is actually connected, and the configured speaker —
+      // BEFORE the isSpeaker() name/class heuristic (which rejects devices that
+      // advertise as "audio-headset", e.g. the Altec HydraMini, and otherwise
+      // made the pill show a different, disconnected device).
+      const auto = (btAutoMac || "").toUpperCase();
+      const isAuto = x => auto && (x.mac || "").toUpperCase() === auto;
+      return devices.find(x => isAuto(x) && x.connected) ||
+        devices.find(x => x.connected) ||
+        devices.find(isAuto) ||
+        devices.find(x => isSpeaker(x)) ||
+        devices.find(x => x.paired || x.trusted) ||
+        null;
+    }
+    function renderBt(d){
+      btAutoMac = (d.autoconnect_mac || "").toUpperCase();
+      const st = $("btState");
+      const summary = $("btSummary");
+      const big = $("speakerBigState");
+      const setup = $("setupBtn");
+      const forget = $("forgetBtn");
+      const devices = d.devices || [];
+      const target = chooseSpeaker(devices);
+      btTarget = target;
+
+      if(!d.available){
+        st.textContent = "Bluetooth missing";
+        st.className = "pill warn";
+        big.textContent = "Bluetooth is not available";
+        big.className = "speakerBigState wait";
+        summary.textContent = "The Pi cannot use Bluetooth right now.";
+        setSpeakerPill({available:false, connected:false});
+        $("btList").innerHTML = `<li class="empty">Bluetooth is not available on this Pi.</li>`;
+        setup.disabled = true;
+        forget.disabled = true;
+        return;
+      }
+
+      st.textContent = d.powered ? "Powered on" : "Powered off";
+      st.className = "pill " + (d.powered ? "on" : "warn");
+      $("btList").innerHTML = devices.length ? devices.map(btRow).join("") : `<li class="empty">No Bluetooth devices found.</li>`;
+
+      const connected = !!(target && target.connected);
+      setSpeakerPill({
+        available: true,
+        connected,
+        name: connected ? target.name : null,
+        mac: target ? target.mac : null
+      });
+
+      const trustedOnly = !!(target && target.trusted && !target.paired && !target.connected);
+
+      if(connected){
+        $("speakerName").textContent = target.name || "Speaker";
+        big.textContent = "Ready to play";
+        big.className = "speakerBigState ready";
+        summary.textContent = "The speaker is connected.";
+        setup.disabled = true;
+        forget.disabled = false;
+      } else if(trustedOnly){
+        $("speakerName").textContent = target.name || "Speaker";
+        big.textContent = "Start over needed";
+        big.className = "speakerBigState wait";
+        summary.textContent = "The Pi has an old Bluetooth record, but pairing is not saved. Tap Start over, make the speaker blink, then Find speaker.";
+        setup.disabled = true;
+        forget.disabled = false;
+      } else if(target && target.pairable === false && !target.paired){
+        $("speakerName").textContent = target.name || "Speaker";
+        big.textContent = "Found nearby, not ready yet";
+        big.className = "speakerBigState wait";
+        summary.textContent = "Keep the speaker blinking, then tap Find speaker again.";
+        setup.disabled = true;
+        forget.disabled = true;
+      } else if(target){
+        $("speakerName").textContent = target.name || "Speaker";
+        big.textContent = target.paired ? "Saved, but not connected" : "Found";
+        big.className = "speakerBigState wait";
+        summary.textContent = "Tap Pair and connect.";
+        setup.disabled = false;
+        forget.disabled = false;
+      } else {
+        $("speakerName").textContent = "Bluetooth speaker";
+        big.textContent = "Not found";
+        big.className = "speakerBigState wait";
+        summary.textContent = "Hold the speaker button until it blinks, then tap Find speaker.";
+        setup.disabled = true;
+        forget.disabled = true;
+      }
+      loadSinks();
+    }
+    async function loadBt(){
+      try{ renderBt(await api("/api/bt")); }catch(e){}
+    }
+    function btRow(x){
+      const mac = esc(x.mac || "");
+      const tags = [];
+      const trustedOnly = !!(x.trusted && !x.paired && !x.connected);
+      if(x.connected) tags.push(`<span class="pill on">connected</span>`);
+      else if(x.paired) tags.push(`<span class="pill">saved</span>`);
+      else if(trustedOnly) tags.push(`<span class="pill warn">old record</span>`);
+      else tags.push(`<span class="pill warn">not paired</span>`);
+      if(x.paired && (x.mac || "").toUpperCase() === btAutoMac) tags.push(`<span class="pill on">auto</span>`);
+      const actions = [];
+      if(trustedOnly) {
+        actions.push(`<button class="ghost danger" onclick="btAct('remove','${mac}')" type="button">Start over</button>`);
+      } else if(!x.paired) actions.push(`<button class="blue" onclick="btAct('pair','${mac}')" type="button" ${x.pairable === false ? "disabled" : ""}>Pair</button>`);
+      else if(x.connected) actions.push(`<button class="ghost" onclick="btAct('disconnect','${mac}')" type="button">Disconnect</button>`);
+      else actions.push(`<button class="blue" onclick="btAct('connect','${mac}')" type="button">Connect</button>`);
+      if(x.paired){
+        if((x.mac || "").toUpperCase() === btAutoMac) actions.push(`<button class="ghost" onclick="btAuto('')" type="button">Stop auto</button>`);
+        else actions.push(`<button class="ghost" onclick="btAuto('${mac}')" type="button">Auto connect</button>`);
+      }
+      if(!trustedOnly) actions.push(`<button class="ghost danger" onclick="btAct('remove','${mac}')" type="button">Start over</button>`);
+      const state = trustedOnly ? "Old Bluetooth record only. Start over before pairing again." : (x.connected ? "Ready to play." : (x.paired ? "Pairing is saved, but audio is not connected." : "Found by scan; pairing is not saved yet."));
+      return `<li class="item"><span class="nm">${esc(x.name)}<span class="meta">${mac}</span><span class="btStateText">${state}</span></span>
+        <span class="badges">${tags.join("")}</span><span class="btActions">${actions.join("")}</span></li>`;
+    }
+    async function refreshBtSoon(ms=400){
+      setTimeout(loadBt, ms);
+    }
+    function btUiLog(message, detail=""){
+      const text = new Date().toLocaleTimeString() + " UI " + message + (detail ? " | " + detail : "");
+      const box = $("btLogBox");
+      if(box){
+        box.textContent = (box.textContent ? box.textContent + "\n" : "") + text;
+        box.scrollTop = box.scrollHeight;
+      }
+      fetch("/api/client-log", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({message, detail})
+      }).catch(() => {});
+    }
+    async function btPower(on){
+      btUiLog("Bluetooth power button", on ? "on" : "off");
+      try{
+        await api("/api/bt/power", {on});
+        btUiLog("Bluetooth power result", "ok");
+        refreshBtSoon();
+        loadBtLogs(true);
+      }catch(e){ btUiLog("Bluetooth power error", e.message); toast(e.message); loadBtLogs(true); }
+    }
+    async function btScan(){
+      const b = $("scanBtn");
+      b.disabled = true;
+      b.textContent = "Finding...";
+      btUiLog("Find speaker clicked", "scan 10s");
+      try{
+        const result = await api("/api/bt/scan", {seconds:10});
+        btUiLog("Find speaker result", `${(result.devices || []).length} devices`);
+        renderBt(result);
+        loadBtLogs(true);
+      }catch(e){ btUiLog("Find speaker error", e.message); toast(e.message); loadBtLogs(true); }
+      finally{ b.disabled = false; b.textContent = "Find speaker"; }
+    }
+    async function btSetup(){
+      if(!btTarget){
+        btUiLog("Pair and connect clicked", "no selected speaker");
+        toast("Find the speaker first");
+        loadBtLogs(true);
+        return;
+      }
+      const b = $("setupBtn");
+      b.disabled = true;
+      b.textContent = "Connecting...";
+      btUiLog("Pair and connect clicked", `${btTarget.name || "speaker"} ${btTarget.mac}`);
+      try{
+        const r = await api("/api/bt/setup", {mac:btTarget.mac});
+        btUiLog("Pair and connect result", r.message || "Speaker ready");
+        toast(r.message || "Speaker ready");
+        await loadBt();
+        loadBtLogs(true);
+      }catch(e){
+        btUiLog("Pair and connect error", e.message);
+        toast(e.message);
+        refreshBtSoon(800);
+        loadBtLogs(true);
+      }finally{
+        b.textContent = "Pair and connect";
+      }
+    }
+    async function btForget(){
+      const mac = (btTarget && btTarget.mac) || btAutoMac || btFallbackMac;
+      btUiLog("Start over clicked", mac);
+      try{
+        await api("/api/bt/remove", {mac});
+        btTarget = null;
+        btUiLog("Start over result", "removed");
+        toast("Started over");
+        await loadBt();
+        loadBtLogs(true);
+      }catch(e){ btUiLog("Start over error", e.message); toast(e.message); refreshBtSoon(800); loadBtLogs(true); }
+    }
+    async function btAct(act, mac){
+      btUiLog("Advanced Bluetooth action clicked", `${act} ${mac}`);
+      try{
+        const r = await api("/api/bt/" + act, {mac});
+        btUiLog("Advanced Bluetooth action result", `${act}: ${r.message || "ok"}`);
+        toast(r.message || act + " ok");
+        refreshBtSoon(act === "connect" ? 900 : 600);
+        loadBtLogs(true);
+      }catch(e){
+        btUiLog("Advanced Bluetooth action error", `${act}: ${e.message}`);
+        toast(e.message);
+        refreshBtSoon(900);
+        loadBtLogs(true);
+      }
+    }
+    async function btAuto(mac){
+      btUiLog("Auto connect clicked", mac || "off");
+      try{
+        await api("/api/bt/autoconnect", {mac});
+        btUiLog("Auto connect result", mac ? "saved" : "off");
+        toast(mac ? "Auto connect saved" : "Auto connect off");
+        refreshBtSoon(600);
+        loadBtLogs(true);
+      }catch(e){ btUiLog("Auto connect error", e.message); toast(e.message); refreshBtSoon(900); loadBtLogs(true); }
+    }
+    async function loadSinks(){
+      try{
+        const d = await api("/api/bt/sinks");
+        $("sinkSel").innerHTML = `<option value="">(default)</option>` + d.sinks.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("");
+        $("sinkInfo").textContent = d.backend ? ("Audio backend: " + d.backend) : "No audio mixer backend detected.";
+      }catch(e){}
+    }
+    async function setSink(){ try{ await api("/api/bt/sink", {sink:$("sinkSel").value}); toast("Output set"); }catch(e){ toast(e.message); } }
+
+    let btLogTimer = null;
+    let btLogPaused = false;
+    async function loadBtLogs(force=false){
+      const box = $("btLogBox");
+      if(!box || (btLogPaused && !force)) return;
+      try{
+        const targetMac = btTarget && btTarget.mac ? "&mac=" + encodeURIComponent(btTarget.mac) : "";
+        const d = await api("/api/bt/logs?minutes=10&limit=450" + targetMac);
+        const lines = d.lines || [];
+        box.textContent = lines.join("\n") || "(no Bluetooth logs yet)";
+        box.scrollTop = box.scrollHeight;
+        const meta = $("btLogMeta");
+        if(meta){
+          const mac = d.mac ? d.mac : "no saved speaker";
+          meta.textContent = `${lines.length} lines / ${mac}`;
+          meta.className = "pill on";
+        }
+      }catch(e){
+        box.textContent = "Bluetooth log error: " + e.message;
+        const meta = $("btLogMeta");
+        if(meta){
+          meta.textContent = "log error";
+          meta.className = "pill warn";
+        }
+      }
+    }
+    function startBtLogs(){
+      btLogPaused = false;
+      const btn = $("btLogPauseBtn");
+      if(btn) btn.textContent = "Pause";
+      loadBtLogs(true);
+      if(!btLogTimer) btLogTimer = setInterval(loadBtLogs, 1000);
+    }
+    function stopBtLogs(){
+      if(btLogTimer){
+        clearInterval(btLogTimer);
+        btLogTimer = null;
+      }
+    }
+    function toggleBtLogPause(){
+      btLogPaused = !btLogPaused;
+      const btn = $("btLogPauseBtn");
+      if(btn) btn.textContent = btLogPaused ? "Resume" : "Pause";
+      if(!btLogPaused) loadBtLogs(true);
+    }
+
+    let diagTimer = null;
+    let diagSeq = 0;
+    function startInputDiagnostics(){
+      loadInputDiagnostics();
+      if(!diagTimer) diagTimer = setInterval(loadInputDiagnostics, 350);
+    }
+    function stopInputDiagnostics(){
+      if(diagTimer){
+        clearInterval(diagTimer);
+        diagTimer = null;
+      }
+    }
+    function setDiagPill(id, on, label){
+      const el = $(id);
+      if(!el) return;
+      el.textContent = label;
+      el.className = "pill " + (on ? "on" : "warn");
+    }
+    function setLamp(id, state){
+      const el = $(id);
+      if(!el) return;
+      el.className = "diagLamp " + (state ? "on" : "warn");
+    }
+    function setText(id, value){
+      const el = $(id);
+      if(el) el.textContent = value;
+    }
+    async function loadInputDiagnostics(){
+      let d;
+      try{ d = await api("/api/diagnostics/inputs"); }
+      catch(e){
+        setDiagPill("diagInputsActive", false, "inputs: error");
+        setText("diagErrors", e.message);
+        return;
+      }
+      renderInputDiagnostics(d);
+    }
+    async function testBeep(){
+      try{
+        const r = await api("/api/diagnostics/beep", {});
+        toast(r.wired ? "Beep sent (2 beeps)" : "No buzzer wired on the pin");
+      }catch(e){ toast(e.message); }
+    }
+    let _logTimer = null;
+    async function loadLogs(){
+      try{
+        const r = await api("/api/logs?limit=200");
+        const box = $("logBox");
+        box.textContent = (r.lines || []).join("\n") || "(no logs yet)";
+        box.scrollTop = box.scrollHeight;
+      }catch(e){ $("logBox").textContent = "log error: " + e.message; }
+    }
+    function toggleLogs(){
+      const wrap = $("logWrap"), btn = $("logsBtn");
+      const showing = wrap.style.display !== "none";
+      if(showing){
+        wrap.style.display = "none"; btn.textContent = "Show logs";
+        if(_logTimer){ clearInterval(_logTimer); _logTimer = null; }
+      } else {
+        wrap.style.display = "block"; btn.textContent = "Hide logs";
+        loadLogs();
+        _logTimer = setInterval(loadLogs, 3000);  // auto-refresh while open
+      }
+    }
+    function renderInputDiagnostics(d){
+      const enc = d.encoder || {};
+      const btn = d.button || {};
+      const encCounts = enc.counts || {};
+      const btnCounts = btn.counts || {};
+      const changed = d.event_seq && d.event_seq !== diagSeq;
+      diagSeq = d.event_seq || diagSeq;
+
+      setDiagPill("diagInputsActive", !!d.active, d.active ? "inputs: active" : "inputs: off");
+      setDiagPill("diagGpioActive", !!d.gpio_available, d.gpio_available ? "gpio: ready" : "gpio: not ready");
+      setLamp("diagEncoderLamp", !!enc.active);
+      setLamp("diagButtonLamp", btn.pressed === true || !!btn.active);
+      setText("diagEncoderPins", enc.configured ? `A GPIO${enc.clk} / B GPIO${enc.dt}` : "not set");
+      setText("diagEncoderStarted", enc.active ? "yes" : (enc.configured ? "no" : "not set"));
+      setText("diagEncoderSteps", enc.steps === null || enc.steps === undefined ? "--" : enc.steps);
+      setText("diagEncoderBounce", enc.bounce_ms === null || enc.bounce_ms === undefined ? "--" : `${enc.bounce_ms} ms`);
+      setText("diagEncoderCw", encCounts.clockwise || 0);
+      setText("diagEncoderCcw", encCounts.counter_clockwise || 0);
+      setText("diagEncoderLast", enc.last_direction || "--");
+      setText("diagButtonPin", btn.configured ? `GPIO${btn.pin} (${btn.source || "pin"})` : "not set");
+      setText("diagButtonStarted", btn.active ? "yes" : (btn.configured ? "no" : "not set"));
+      setText("diagButtonPressed", btn.pressed === null || btn.pressed === undefined ? "--" : (btn.pressed ? "PRESSED" : "released"));
+      setText("diagButtonBounce", btn.bounce_ms === null || btn.bounce_ms === undefined ? "--" : `${btn.bounce_ms} ms`);
+      setText("diagButtonPresses", btnCounts.pressed || 0);
+      setText("diagButtonShort", btnCounts.short || 0);
+      setText("diagButtonDouble", btnCounts.double || 0);
+      setText("diagButtonHeld", btnCounts.held || 0);
+      setText("diagButtonLast", btn.last_event || "--");
+
+      const events = (d.events || []).slice().reverse();
+      $("diagEvents").innerHTML = events.length ? events.map(e => {
+        const t = e.time ? new Date(e.time * 1000).toLocaleTimeString() : "";
+        return `<div class="diagEvent"><span class="diagEventTime">${esc(t)}</span>${esc(e.message || "")}</div>`;
+      }).join("") : `<div class="diagEvent">No events yet.</div>`;
+      const errors = d.errors || [];
+      const pinHint = errors.some(e => e.includes("not a valid pin name"))
+        ? " Use BCM GPIO numbers: physical 29 = GPIO5, physical 31 = GPIO6."
+        : "";
+      $("diagErrors").textContent = errors.length ? ("Errors: " + errors.join(" / ") + pinHint) : "";
+      if(changed && $("diagPanel")){
+        $("diagPanel").classList.remove("diagFlash");
+        void $("diagPanel").offsetWidth;
+        $("diagPanel").classList.add("diagFlash");
+      }
+    }
+
+    async function loadConfig(){
+      let d;
+      try{ d = await api("/api/settings"); }catch(e){ return; }
+      syncKidConfigFromRaw(d.settings);
+      $("cfgMeta").textContent = `mixer: ${d.mixer_backend || "none"} / bt: ${d.bt_available ? "yes" : "no"} / inputs: ${d.inputs_active ? "active" : "off"}`;
+    }
+    function syncKidConfigFromRaw(settings){
+      applyTheme(settings.theme || "neon");
+      document.querySelectorAll("input[name=k_mode]").forEach(x => x.checked = x.value === settings.mode);
+      document.querySelectorAll("input[name=k_encoder_role]").forEach(x => x.checked = x.value === settings.encoder_role);
+      $("k_volume").value = settings.volume;
+      $("k_volume_lbl").textContent = settings.volume + "%";
+      ["player_cmd","default_sink","encoder_clk","encoder_dt","encoder_sw","piezo_pin","double_click_ms","long_press_ms","button_bounce_ms","encoder_bounce_ms"].forEach(k => {
+        const el = $("k_" + k);
+        if(el) el.value = settings[k];
+      });
+    }
+    function kidConfigBody(){
+      const mode = document.querySelector("input[name=k_mode]:checked");
+      const role = document.querySelector("input[name=k_encoder_role]:checked");
+      const body = {
+        mode: mode ? mode.value : "sequential",
+        volume: +$("k_volume").value,
+        encoder_role: role ? role.value : "select",
+        player_cmd: $("k_player_cmd").value,
+        default_sink: $("k_default_sink").value,
+        theme: safeTheme($("k_theme").value),
+      };
+      ["encoder_clk","encoder_dt","encoder_sw","piezo_pin","double_click_ms","long_press_ms","button_bounce_ms","encoder_bounce_ms"].forEach(k => {
+        const el = $("k_" + k);
+        if(el) body[k] = +el.value;
+      });
+      return body;
+    }
+    async function saveConfig(){
+      const body = kidConfigBody();
+      applyTheme(body.theme);
+      try{
+        const r = await api("/api/settings", body);
+        refresh();
+        if(r.restart_required && r.restart_required.length){
+          showReboot(r.restart_required);
+        } else {
+          toast("Saved");
+        }
+      }catch(e){ toast(e.message); }
+    }
+
+    function showReboot(keys){
+      $("rebootMsg").textContent = "Wire changes (" + keys.join(", ") + ") need a restart to take effect.";
+      $("rebootModal").style.display = "flex";
+    }
+    function hideReboot(){ $("rebootModal").style.display = "none"; }
+    async function doReboot(){
+      hideReboot();
+      $("rebootOverlay").style.display = "flex";
+      try{ await api("/api/reboot", {}); }catch(e){}
+      let tries = 0;
+      const t = setInterval(async () => {
+        tries++;
+        try{
+          const r = await fetch("/api/status", {cache:"no-store"});
+          if(r.ok){ clearInterval(t); $("rebootStatus").textContent = "Back online! Reloading..."; setTimeout(() => location.reload(), 1200); return; }
+        }catch(e){}
+        if(tries > 60){ clearInterval(t); $("rebootStatus").textContent = "Still waiting - reload the page manually in a moment."; }
+      }, 3000);
+    }
+
+    function setSpeakerPill(d){
+      const on = d && d.connected;
+      let txt, cls;
+      if(!d){ txt = "Speaker: status error"; cls = "spkPill spkUnknown"; }
+      else if(on){ txt = "🔊 " + (d.name || "Speaker connected"); cls = "spkPill spkOn"; }
+      else if(d.available === false){ txt = "Speaker: no Bluetooth"; cls = "spkPill spkUnknown"; }
+      else { txt = "🔇 Speaker not connected"; cls = "spkPill spkOff"; }
+      ["spkStatusPlayer","spkStatusBt"].forEach(id => {
+        const el = $(id);
+        if(el){ el.textContent = txt; el.className = cls; }
+      });
+    }
+    async function pollSpeaker(){
+      try{ setSpeakerPill(await api("/api/bt/connected")); }
+      catch(e){ setSpeakerPill(null); }
+    }
+
+    setSpeakerPill = function(d){
+      const on = d && d.connected;
+      let txt, cls;
+      if(!d){ txt = "Speaker: status error"; cls = "spkPill spkUnknown"; }
+      else if(on){ txt = (d.name || "Speaker") + " connected"; cls = "spkPill spkOn"; }
+      else if(d.available === false){ txt = "Speaker: no Bluetooth"; cls = "spkPill spkUnknown"; }
+      else { txt = "Speaker not connected"; cls = "spkPill spkOff"; }
+      ["spkStatusPlayer","spkStatusBt"].forEach(id => {
+        const el = $(id);
+        if(el){ el.textContent = txt; el.className = cls; }
+      });
+    };
+    pollSpeaker = async function(){
+      try{ await loadBt(); }
+      catch(e){ setSpeakerPill(null); }
+    };
+
+    applyTheme("neon");
+    loadConfig();
+    showTab(new URLSearchParams(location.search).get("tab") || "player");
+    refresh();
+    setInterval(() => { if($("panel-player").classList.contains("active")) refresh(); }, 2500);
+    pollSpeaker();
+    setInterval(pollSpeaker, 3000);  // realtime speaker-connected status, both tabs
+  </script>
+</body>
+</html>

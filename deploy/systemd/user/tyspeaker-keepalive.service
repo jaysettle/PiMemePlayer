@@ -1,0 +1,12 @@
+[Unit]
+Description=TySpeaker BT keep-alive (very low tone keeps Bluetooth speaker awake)
+After=pipewire.service wireplumber.service pipewire-pulse.service
+Wants=pipewire-pulse.service
+
+[Service]
+ExecStart=/usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -f lavfi -i sine=frequency=18:sample_rate=48000,volume=0.001,pan=stereo|c0=c0|c1=c0 -f pulse tyspeaker-keepalive
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

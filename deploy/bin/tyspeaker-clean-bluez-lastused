@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+# BlueZ can cache a local A2DP SEP as LastUsed even after WirePlumber
+# re-registers a different endpoint. On this Pi that leads to
+# "Unable to load LastUsed: lseid 2 not found" and bluetoothd aborts.
+for adapter in /var/lib/bluetooth/*; do
+  [ -d "$adapter/cache" ] || continue
+  for mac in 9D:31:DA:AD:24:69 08:EB:ED:0D:1D:BF; do
+    cache="$adapter/cache/$mac"
+    [ -f "$cache" ] || continue
+    sed -i '/^LastUsed=/d' "$cache"
+  done
+done

@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" role="img" aria-labelledby="title desc">
+  <title id="title">Raspberry Pi Zero 2 W button pinout</title>
+  <desc id="desc">Pi Zero 2 W 40-pin header guide. The big button connects GPIO17 physical pin 11 to ground physical pin 9.</desc>
+  <defs>
+    <linearGradient id="board" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#1fbf74"/>
+      <stop offset="1" stop-color="#087f5b"/>
+    </linearGradient>
+    <linearGradient id="wire" x1="0" x2="1">
+      <stop offset="0" stop-color="#ff7a18"/>
+      <stop offset="1" stop-color="#ffe66d"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#000000" flood-opacity=".22"/>
+    </filter>
+    <style>
+      text{font-family:Arial,Helvetica,sans-serif}
+      .pin{fill:#151923;stroke:#ffffff;stroke-width:2}
+      .gpio{fill:#263247}
+      .power{fill:#c92a2a}
+      .gnd{fill:#1f2937}
+      .target{fill:#ff7a18;stroke:#ffe66d;stroke-width:5}
+      .target-ground{fill:#2563eb;stroke:#bfe7ff;stroke-width:5}
+      .pinText{fill:#ffffff;font-size:18px;font-weight:800;text-anchor:middle;dominant-baseline:central}
+      .label{fill:#182034;font-size:17px;font-weight:700}
+      .small{fill:#4b5c78;font-size:15px;font-weight:700}
+      .white{fill:#ffffff}
+      .note{fill:#102033;font-size:22px;font-weight:800}
+    </style>
+  </defs>
+
+  <rect width="1180" height="760" rx="36" fill="#f3fbff"/>
+  <circle cx="80" cy="86" r="26" fill="#25d9ff"/>
+  <circle cx="1110" cy="94" r="34" fill="#ffe66d"/>
+  <circle cx="1070" cy="670" r="22" fill="#7cff6b"/>
+  <circle cx="94" cy="682" r="34" fill="#ff7a18"/>
+
+  <text x="62" y="70" class="note">Pi Zero 2 W Button Wires</text>
+  <text x="62" y="104" class="small">Top view pinout. Pin 1 is the square pad at the top-left of the 40-pin header.</text>
+
+  <rect x="88" y="150" width="620" height="460" rx="38" fill="url(#board)" filter="url(#softShadow)"/>
+  <rect x="116" y="188" width="564" height="384" rx="24" fill="#0f6d50" opacity=".45"/>
+  <text x="142" y="222" fill="#ffffff" font-size="25" font-weight="900">Raspberry Pi Zero 2 W</text>
+  <text x="142" y="252" fill="#cdfdec" font-size="16" font-weight="700">HDMI / USB side on the left, GPIO header on the right</text>
+  <rect x="150" y="422" width="115" height="66" rx="14" fill="#c7d2fe" opacity=".9"/>
+  <text x="207" y="462" fill="#12233d" font-size="17" font-weight="900" text-anchor="middle">mini HDMI</text>
+  <rect x="304" y="432" width="86" height="54" rx="12" fill="#dbeafe"/>
+  <text x="347" y="465" fill="#12233d" font-size="15" font-weight="900" text-anchor="middle">USB</text>
+  <rect x="420" y="432" width="86" height="54" rx="12" fill="#dbeafe"/>
+  <text x="463" y="465" fill="#12233d" font-size="15" font-weight="900" text-anchor="middle">PWR</text>
+  <circle cx="136" cy="176" r="17" fill="#d9f99d"/>
+  <circle cx="660" cy="176" r="17" fill="#d9f99d"/>
+  <circle cx="136" cy="584" r="17" fill="#d9f99d"/>
+  <circle cx="660" cy="584" r="17" fill="#d9f99d"/>
+
+  <g transform="translate(735 142)">
+    <rect x="0" y="0" width="360" height="532" rx="24" fill="#101827" filter="url(#softShadow)"/>
+    <text x="180" y="34" class="white" font-size="22" font-weight="900" text-anchor="middle">40-pin GPIO header</text>
+    <text x="92" y="62" fill="#9fb5d4" font-size="14" font-weight="800" text-anchor="middle">odd pins</text>
+    <text x="268" y="62" fill="#9fb5d4" font-size="14" font-weight="800" text-anchor="middle">even pins</text>
+
+    <!-- pin circles -->
+    <g id="pins">
+      <circle class="pin power" cx="92" cy="86" r="17"/><text class="pinText" x="92" y="86">1</text>
+      <circle class="pin power" cx="268" cy="86" r="17"/><text class="pinText" x="268" y="86">2</text>
+      <circle class="pin gpio" cx="92" cy="108" r="17"/><text class="pinText" x="92" y="108">3</text>
+      <circle class="pin power" cx="268" cy="108" r="17"/><text class="pinText" x="268" y="108">4</text>
+      <circle class="pin gpio" cx="92" cy="130" r="17"/><text class="pinText" x="92" y="130">5</text>
+      <circle class="pin gnd" cx="268" cy="130" r="17"/><text class="pinText" x="268" y="130">6</text>
+      <circle class="pin gpio" cx="92" cy="152" r="17"/><text class="pinText" x="92" y="152">7</text>
+      <circle class="pin gpio" cx="268" cy="152" r="17"/><text class="pinText" x="268" y="152">8</text>
+      <circle class="pin target-ground" cx="92" cy="174" r="18"/><text class="pinText" x="92" y="174">9</text>
+      <circle class="pin gpio" cx="268" cy="174" r="17"/><text class="pinText" x="268" y="174">10</text>
+      <circle class="pin target" cx="92" cy="196" r="18"/><text class="pinText" x="92" y="196">11</text>
+      <circle class="pin gpio" cx="268" cy="196" r="17"/><text class="pinText" x="268" y="196">12</text>
+      <circle class="pin gpio" cx="92" cy="218" r="17"/><text class="pinText" x="92" y="218">13</text>
+      <circle class="pin gnd" cx="268" cy="218" r="17"/><text class="pinText" x="268" y="218">14</text>
+      <circle class="pin gpio" cx="92" cy="240" r="17"/><text class="pinText" x="92" y="240">15</text>
+      <circle class="pin gpio" cx="268" cy="240" r="17"/><text class="pinText" x="268" y="240">16</text>
+      <circle class="pin power" cx="92" cy="262" r="17"/><text class="pinText" x="92" y="262">17</text>
+      <circle class="pin gpio" cx="268" cy="262" r="17"/><text class="pinText" x="268" y="262">18</text>
+      <circle class="pin gpio" cx="92" cy="284" r="17"/><text class="pinText" x="92" y="284">19</text>
+      <circle class="pin gnd" cx="268" cy="284" r="17"/><text class="pinText" x="268" y="284">20</text>
+      <circle class="pin gpio" cx="92" cy="306" r="17"/><text class="pinText" x="92" y="306">21</text>
+      <circle class="pin gpio" cx="268" cy="306" r="17"/><text class="pinText" x="268" y="306">22</text>
+      <circle class="pin gpio" cx="92" cy="328" r="17"/><text class="pinText" x="92" y="328">23</text>
+      <circle class="pin gpio" cx="268" cy="328" r="17"/><text class="pinText" x="268" y="328">24</text>
+      <circle class="pin gnd" cx="92" cy="350" r="17"/><text class="pinText" x="92" y="350">25</text>
+      <circle class="pin gpio" cx="268" cy="350" r="17"/><text class="pinText" x="268" y="350">26</text>
+      <circle class="pin gpio" cx="92" cy="372" r="17"/><text class="pinText" x="92" y="372">27</text>
+      <circle class="pin gpio" cx="268" cy="372" r="17"/><text class="pinText" x="268" y="372">28</text>
+      <circle class="pin gpio" cx="92" cy="394" r="17"/><text class="pinText" x="92" y="394">29</text>
+      <circle class="pin gnd" cx="268" cy="394" r="17"/><text class="pinText" x="268" y="394">30</text>
+      <circle class="pin gpio" cx="92" cy="416" r="17"/><text class="pinText" x="92" y="416">31</text>
+      <circle class="pin gpio" cx="268" cy="416" r="17"/><text class="pinText" x="268" y="416">32</text>
+      <circle class="pin gpio" cx="92" cy="438" r="17"/><text class="pinText" x="92" y="438">33</text>
+      <circle class="pin gnd" cx="268" cy="438" r="17"/><text class="pinText" x="268" y="438">34</text>
+      <circle class="pin gpio" cx="92" cy="460" r="17"/><text class="pinText" x="92" y="460">35</text>
+      <circle class="pin gpio" cx="268" cy="460" r="17"/><text class="pinText" x="268" y="460">36</text>
+      <circle class="pin gpio" cx="92" cy="482" r="17"/><text class="pinText" x="92" y="482">37</text>
+      <circle class="pin gpio" cx="268" cy="482" r="17"/><text class="pinText" x="268" y="482">38</text>
+      <circle class="pin gnd" cx="92" cy="504" r="17"/><text class="pinText" x="92" y="504">39</text>
+      <circle class="pin gpio" cx="268" cy="504" r="17"/><text class="pinText" x="268" y="504">40</text>
+    </g>
+
+    <!-- labels for key pins -->
+    <text x="22" y="93" fill="#ffc9c9" font-size="13" font-weight="800">3V3</text>
+    <text x="305" y="93" fill="#ffc9c9" font-size="13" font-weight="800">5V</text>
+    <text x="20" y="178" fill="#bfe7ff" font-size="13" font-weight="900">GND</text>
+    <text x="16" y="201" fill="#ffe66d" font-size="13" font-weight="900">GPIO17</text>
+    <text x="304" y="135" fill="#e5e7eb" font-size="13" font-weight="800">GND</text>
+    <text x="304" y="222" fill="#e5e7eb" font-size="13" font-weight="800">GND</text>
+    <text x="304" y="288" fill="#e5e7eb" font-size="13" font-weight="800">GND</text>
+    <text x="304" y="442" fill="#e5e7eb" font-size="13" font-weight="800">GND</text>
+  </g>
+
+  <!-- button and wiring callout -->
+  <g filter="url(#softShadow)">
+    <rect x="94" y="632" width="526" height="82" rx="24" fill="#102033"/>
+    <circle cx="153" cy="673" r="30" fill="#ff7a18" stroke="#ffe66d" stroke-width="7"/>
+    <circle cx="153" cy="673" r="13" fill="#ffffff" opacity=".8"/>
+    <text x="202" y="662" class="white" font-size="22" font-weight="900">Big button wiring</text>
+    <text x="202" y="693" fill="#c8d9f1" font-size="17" font-weight="700">One button leg goes to GPIO17 pin 11. The other leg goes to GND pin 9.</text>
+  </g>
+  <path d="M620 672 C690 640 710 518 735 338 C746 258 757 248 825 338" fill="none" stroke="url(#wire)" stroke-width="12" stroke-linecap="round"/>
+  <path d="M621 693 C700 685 728 553 735 316 C738 218 759 210 825 316" fill="none" stroke="#25d9ff" stroke-width="9" stroke-linecap="round"/>
+
+  <g transform="translate(60 562)">
+    <rect x="0" y="0" width="234" height="42" rx="21" fill="#ffe66d"/>
+    <text x="117" y="27" fill="#102033" font-size="16" font-weight="900" text-anchor="middle">Use BCM number 17 in settings</text>
+  </g>
+</svg>

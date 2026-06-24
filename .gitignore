@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# User data / runtime
+samples/
+state.json
+tyspeaker/        # default TYSPEAKER_DATA dir if created in-repo
+
+# Large device assets (kept locally, never committed)
+*.img
+*.img.xz
+*.Setup.exe
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Personal family/kid photos — NOT published (privacy). Add your own to static/gallery/.
+src/tyspeaker/static/gallery/*.jpg
+src/tyspeaker/static/gallery/*.jpeg
+src/tyspeaker/static/gallery/*.png
+src/tyspeaker/static/gallery/*.gif
+
+# Drive duplicate
+README 2.md

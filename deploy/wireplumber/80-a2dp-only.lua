@@ -1,0 +1,12 @@
+-- Disable HFP/HSP so a Bluetooth speaker that also advertises Handsfree
+-- (e.g. the Sonix) is used as a pure A2DP sink, not a mono headset.
+-- Load after the packaged 50-bluez-config.lua.
+--
+-- IMPORTANT (2026-06-23): this is intentionally a MONITOR-LEVEL PROPERTY ONLY.
+-- Do NOT add a per-device rule that forces `device.profile = "a2dp-sink"` on
+-- `bluez_card.*`. That rule made WirePlumber re-evaluate and tear down /
+-- re-register the A2DP media endpoints on every device event — a "flap" with
+-- multi-minute "Protocol not available" gaps that broke connect AND caused
+-- intermittent disconnects. WirePlumber already prefers A2DP for a media sink,
+-- so disabling the headset roles is all that's needed.
+bluez_monitor.properties["bluez5.headset-roles"] = "[ ]"
