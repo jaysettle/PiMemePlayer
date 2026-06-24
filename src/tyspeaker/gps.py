@@ -238,8 +238,9 @@ class GpsReader:
             snap = dict(self._state)
             raw = list(self._raw)
         lt = time.localtime(now)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        fname = self.log_dir / time.strftime("gps-%Y-%m-%d.jsonl", lt)
+        raw_dir = self.log_dir / "raw"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        fname = raw_dir / time.strftime("%Y-%m-%d.jsonl", lt)
         rec = {
             "iso": time.strftime("%Y-%m-%dT%H:%M:%S", lt),
             "ts": round(now, 1),

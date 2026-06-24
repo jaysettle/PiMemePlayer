@@ -4,6 +4,7 @@ the LAN (no authentication, by design)."""
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from typing import List, Optional
@@ -14,6 +15,7 @@ from . import config
 from .bluetooth import BluetoothAutoConnector, BluetoothManager, normalize_mac
 from .engine import PlaybackEngine
 from .gps import GpsReader
+from .gps_stats import GpsStats
 from .inputs import start_inputs
 from .library import Library
 from .logsetup import configure_logging, get_logger, recent_logs
@@ -318,6 +320,7 @@ def create_app(
         if config.GPS_PORT
         else None
     )
+    gps_stats = GpsStats(config.GPS_LOG_DIR)
     app.config["TYSPEAKER_INPUTS"] = inputs  # keep refs alive
     app.config["TYSPEAKER_BT_AUTOCONNECT"] = bt_auto
     app.config["TYSPEAKER_GPS"] = gps
@@ -440,6 +443,16 @@ def create_app(
             return jsonify(gps.status())
         return jsonify(available=False, receiving=False, port=config.GPS_PORT)
 
+    @app.get("/api/gps/days")
+    def api_gps_days():
+        return jsonify(gps_stats.list_days())
+
+    @app.get("/api/gps/day/<date>")
+    def api_gps_day(date):
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date or ""):
+            return jsonify(error="bad date"), 400
+        return jsonify(gps_stats.compute_day(date))
+
     @app.get("/api/diagnostics/inputs")
     def api_input_diagnostics():
         if inputs is not None and hasattr(inputs, "diagnostics"):
@@ -497,7 +510,14 @@ def create_app(
         if piezo is None:
             return jsonify(ok=False, error="piezo not configured"), 400
         wired = getattr(piezo, "_pwm", None) is not None
-        # two short beeps = recognizable test cue
+        freq = _body().get("freq")
+        if freq:
+            try:
+                piezo.tone(float(freq), 250)  # single beep at the chosen pitch
+                return jsonify(ok=True, wired=wired, freq=float(freq))
+            except (TypeError, ValueError):
+                pass
+        # default: two short beeps at the resonant pitch = recognizable test cue
         piezo.play_pattern([(120, 90), (120, 0)])
         return jsonify(ok=True, wired=wired)
 

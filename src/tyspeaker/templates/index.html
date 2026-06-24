@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>TySpeaker</title>
+  <!-- Leaflet for the GPS track map (loaded from CDN; the map needs internet for
+       tiles, which is fine for at-home review — metrics work offline regardless) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     :root{
       --bg:#090b17; --panel:#12172a; --panel2:#182033; --tool:#202942;
@@ -236,6 +240,7 @@
     <img class="logo" src="/static/tyspeaker-logo.svg" alt="TySpeaker logo">
     <button class="tab active" data-tab="player" type="button"><span class="tabIcon">P</span> Ty Player</button>
     <button class="tab" data-tab="bt" type="button"><span class="tabIcon">B</span> Bluetooth</button>
+    <button class="tab" data-tab="gps" type="button"><span class="tabIcon">G</span> GPS</button>
     <button class="tab" data-tab="config" type="button"><span class="tabIcon">S</span> Settings</button>
     <div class="navTools">
       <label>Theme
@@ -381,6 +386,54 @@
       </div>
     </section>
 
+    <section class="panel" id="panel-gps">
+      <h1>GPS</h1>
+      <p class="sub">Where he rode — tracks, miles and speed. Pick a day to see the route on the map.</p>
+
+      <div class="row" style="flex-wrap:wrap; gap:12px; margin-top:6px">
+        <div class="diagCard" style="flex:1; min-width:115px; text-align:center">
+          <div style="font-size:30px; font-weight:800; color:var(--accent3)" id="m_miles">--</div>
+          <div class="mini">Miles today</div>
+        </div>
+        <div class="diagCard" style="flex:1; min-width:115px; text-align:center">
+          <div style="font-size:30px; font-weight:800; color:var(--accent2)" id="m_time">--</div>
+          <div class="mini">Time riding</div>
+        </div>
+        <div class="diagCard" style="flex:1; min-width:115px; text-align:center">
+          <div style="font-size:30px; font-weight:800; color:var(--accent2)" id="m_avg">--</div>
+          <div class="mini">Avg speed</div>
+        </div>
+        <div class="diagCard" style="flex:1; min-width:115px; text-align:center">
+          <div style="font-size:30px; font-weight:800; color:var(--danger)" id="m_top">--</div>
+          <div class="mini">Top speed</div>
+        </div>
+        <div class="diagCard" style="flex:1; min-width:140px; text-align:center">
+          <div style="font-size:30px; font-weight:800; color:var(--gold)" id="m_odo">--</div>
+          <div class="mini">Total miles ever 🛴</div>
+        </div>
+      </div>
+
+      <details class="sectionBox" open style="margin-top:14px">
+        <summary>Pick a day</summary>
+        <div class="row" style="flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px">
+          <label class="fld" style="max-width:220px">Month
+            <select id="gpsMonth" onchange="renderGpsDays()"></select></label>
+          <span id="gpsMonthTotal" class="pill"></span>
+          <button class="ghost" onclick="loadGpsDays()" type="button">Refresh</button>
+        </div>
+        <div id="gpsDayList" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px">Loading…</div>
+      </details>
+
+      <div class="sectionBox" style="margin-top:14px">
+        <div class="row" style="justify-content:space-between; align-items:center">
+          <b id="gpsDayTitle">No day selected</b>
+          <span id="gpsDayMeta" class="mini"></span>
+        </div>
+        <div id="gpsMap" style="height:420px; margin-top:10px; border-radius:12px; overflow:hidden; background:#0d121c"></div>
+        <div id="gpsMapMsg" class="mini" style="margin-top:8px"></div>
+      </div>
+    </section>
+
     <section class="panel" id="panel-config">
       <div class="titleRow">
         <div class="titleText">
@@ -466,6 +519,11 @@
           <span id="diagGpioActive" class="pill">gpio: --</span>
           <button class="ghost" onclick="loadInputDiagnostics()" type="button">Refresh</button>
           <button class="blue" onclick="testBeep()" type="button">Test beep</button>
+          <label class="mini" style="display:flex; align-items:center; gap:8px">
+            <input type="range" id="beepFreq" min="100" max="4000" step="50" value="2000"
+                   style="width:140px" oninput="document.getElementById('beepFreqVal').textContent=this.value">
+            <span><b id="beepFreqVal">2000</b> Hz</span>
+          </label>
           <button class="ghost" onclick="toggleLogs()" type="button" id="logsBtn">Show logs</button>
         </div>
         <div id="logWrap" style="display:none; margin-top:12px">
@@ -665,7 +723,7 @@
     }
 
     function showTab(name){
-      if(!["player","bt","config"].includes(name)) name = "player";
+      if(!["player","bt","gps","config"].includes(name)) name = "player";
       document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
       document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
       document.querySelector(`.tab[data-tab="${name}"]`).classList.add("active");
@@ -675,6 +733,9 @@
         startBtLogs();
       } else {
         stopBtLogs();
+      }
+      if(name === "gps"){
+        loadGpsDays();
       }
       if(name === "config"){
         loadConfig();
@@ -1208,8 +1269,9 @@
     }
     async function testBeep(){
       try{
-        const r = await api("/api/diagnostics/beep", {});
-        toast(r.wired ? "Beep sent (2 beeps)" : "No buzzer wired on the pin");
+        const freq = parseInt(($("beepFreq")||{}).value || "2000", 10);
+        const r = await api("/api/diagnostics/beep", {freq});
+        toast(r.wired ? ("Beep sent @ " + freq + " Hz") : "No buzzer wired on the pin");
       }catch(e){ toast(e.message); }
     }
     let _logTimer = null;
@@ -1380,6 +1442,91 @@
       try{ await loadBt(); }
       catch(e){ setSpeakerPill(null); }
     };
+
+    // ---- GPS tab: tracks, metrics, map ----
+    let gpsMap = null, gpsLayer = null, gpsData = null, gpsSelectedDate = null;
+    function fmtDur(s){
+      s = Math.round(s || 0);
+      const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+      if(h) return h + "h " + m + "m";
+      if(m) return m + "m";
+      return s + "s";
+    }
+    function monthLabel(ym){
+      const names = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
+      const p = (ym||"").split("-");
+      return (names[+p[1]] || ym) + " " + p[0];
+    }
+    function dayLabel(date, opts){ return new Date(date+"T00:00:00").toLocaleDateString(undefined, opts); }
+    async function loadGpsDays(){
+      let d;
+      try{ d = await api("/api/gps/days"); }catch(e){ return; }
+      gpsData = d;
+      $("m_odo").textContent = (d.odometer_mi || 0).toFixed(1);
+      const months = d.months || [];
+      const sel = $("gpsMonth");
+      const keep = sel.value;
+      sel.innerHTML = months.length
+        ? months.map(m => `<option value="${m.month}">${monthLabel(m.month)}</option>`).join("")
+        : `<option value="">no rides yet</option>`;
+      if(keep && months.some(m => m.month === keep)) sel.value = keep;
+      renderGpsDays();
+      if(!gpsSelectedDate && months.length && months[0].days.length){
+        loadGpsDay(months[0].days[0].date);
+      } else if(gpsSelectedDate){
+        loadGpsDay(gpsSelectedDate);
+      } else {
+        $("gpsDayTitle").textContent = "No rides logged yet";
+        $("gpsMapMsg").textContent = "Once he rides outside with a GPS fix, his tracks show up here.";
+      }
+    }
+    function renderGpsDays(){
+      if(!gpsData) return;
+      const ym = $("gpsMonth").value;
+      const month = (gpsData.months || []).find(m => m.month === ym);
+      const list = $("gpsDayList");
+      if(!month){ list.innerHTML = "<span class='mini'>No rides.</span>"; $("gpsMonthTotal").textContent = ""; return; }
+      $("gpsMonthTotal").textContent = month.total_mi.toFixed(1) + " mi · " + fmtDur(month.total_moving_s);
+      list.innerHTML = month.days.map(day => {
+        const cls = day.date === gpsSelectedDate ? "primary" : "ghost";
+        const lbl = dayLabel(day.date, {weekday:"short", month:"short", day:"numeric"});
+        return `<button class="${cls}" type="button" onclick="loadGpsDay('${day.date}')" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:96px">
+          <span>${lbl}</span><span class="mini">${day.distance_mi.toFixed(1)} mi</span></button>`;
+      }).join("") || "<span class='mini'>No rides this month.</span>";
+    }
+    function ensureGpsMap(){
+      if(gpsMap || typeof L === "undefined") return gpsMap;
+      gpsMap = L.map("gpsMap", {zoomControl:true}).setView([20,0], 2);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(gpsMap);
+      return gpsMap;
+    }
+    async function loadGpsDay(date){
+      gpsSelectedDate = date;
+      renderGpsDays();
+      let d;
+      try{ d = await api("/api/gps/day/" + date); }catch(e){ return; }
+      const s = d.stats || {};
+      $("m_miles").textContent = (s.distance_mi || 0).toFixed(1);
+      $("m_time").textContent = fmtDur(s.moving_s);
+      $("m_avg").textContent = (s.avg_mph || 0).toFixed(1) + " mph";
+      $("m_top").textContent = (s.max_mph || 0).toFixed(1) + " mph";
+      $("gpsDayTitle").textContent = dayLabel(date, {weekday:"long", month:"long", day:"numeric", year:"numeric"});
+      $("gpsDayMeta").textContent = (s.points || 0) + " points · " + (s.distance_mi || 0).toFixed(2) + " mi · top " + (s.max_mph || 0).toFixed(1) + " mph";
+      const msg = $("gpsMapMsg");
+      if(typeof L === "undefined"){ msg.textContent = "Map needs internet to load (Leaflet). The stats above still work offline."; return; }
+      const map = ensureGpsMap();
+      setTimeout(() => map.invalidateSize(), 120);
+      if(gpsLayer){ gpsLayer.remove(); gpsLayer = null; }
+      const track = (d.track || []).filter(p => p[0] != null && p[1] != null);
+      if(!track.length){ msg.textContent = "No GPS fix recorded this day (indoors, or no sky view)."; return; }
+      msg.textContent = "";
+      const latlngs = track.map(p => [p[0], p[1]]);
+      gpsLayer = L.layerGroup().addTo(map);
+      L.polyline(latlngs, {color:"#25d9ff", weight:5, opacity:0.9}).addTo(gpsLayer);
+      L.circleMarker(latlngs[0], {radius:7, color:"#fff", weight:2, fillColor:"#3cff6b", fillOpacity:1}).bindTooltip("Start").addTo(gpsLayer);
+      L.circleMarker(latlngs[latlngs.length-1], {radius:7, color:"#fff", weight:2, fillColor:"#ff4d74", fillOpacity:1}).bindTooltip("End").addTo(gpsLayer);
+      if(d.bounds){ map.fitBounds(d.bounds, {padding:[30,30], maxZoom:17}); }
+    }
 
     applyTheme("neon");
     loadConfig();
