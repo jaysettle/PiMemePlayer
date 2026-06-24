@@ -13,6 +13,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from . import config
 from .bluetooth import BluetoothAutoConnector, BluetoothManager, normalize_mac
 from .engine import PlaybackEngine
+from .gps import GpsReader
 from .inputs import start_inputs
 from .library import Library
 from .logsetup import configure_logging, get_logger, recent_logs
@@ -309,8 +310,17 @@ def create_app(
         else None
     )
     inputs = start_inputs(cfg, eng) if enable_inputs else None
+    gps = (
+        GpsReader(
+            config.GPS_PORT, config.GPS_BAUD,
+            config.GPS_LOG_DIR, config.GPS_LOG_INTERVAL,
+        ).start()
+        if config.GPS_PORT
+        else None
+    )
     app.config["TYSPEAKER_INPUTS"] = inputs  # keep refs alive
     app.config["TYSPEAKER_BT_AUTOCONNECT"] = bt_auto
+    app.config["TYSPEAKER_GPS"] = gps
 
     def _body() -> dict:
         return request.get_json(silent=True) or request.form.to_dict()
@@ -423,6 +433,12 @@ def create_app(
     @app.get("/api/power")
     def api_power():
         return jsonify(power_status())
+
+    @app.get("/api/gps")
+    def api_gps():
+        if gps is not None:
+            return jsonify(gps.status())
+        return jsonify(available=False, receiving=False, port=config.GPS_PORT)
 
     @app.get("/api/diagnostics/inputs")
     def api_input_diagnostics():

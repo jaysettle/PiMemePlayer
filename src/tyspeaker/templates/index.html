@@ -509,6 +509,48 @@
         <div id="diagErrors" class="mini" style="margin-top:12px"></div>
       </details>
 
+      <details class="sectionBox" open>
+        <summary>GPS</summary>
+        <div class="mini">Serial GPS on <code id="gpsPortName">/dev/ttyS0</code>, logged to the SD card every <span id="gpsInterval">10</span>s. A position fix needs a clear view of the sky — indoors it shows "searching".</div>
+        <div class="row" style="margin-top:12px; flex-wrap:wrap">
+          <span id="gpsStatusPill" class="pill">GPS: --</span>
+          <span id="gpsFixPill" class="pill">fix: --</span>
+          <button class="ghost" onclick="loadGps()" type="button">Refresh</button>
+        </div>
+        <div class="diagGrid" style="margin-top:12px">
+          <div class="diagCard">
+            <h3>Module <span id="gpsLamp" class="diagLamp"></span></h3>
+            <div class="diagRows">
+              <div class="diagRow"><span>Port</span><span id="gpsPort" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Receiving</span><span id="gpsRecv" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Last data</span><span id="gpsAge" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Sentences</span><span id="gpsSentences" class="diagValue">0</span></div>
+              <div class="diagRow"><span>Read errors</span><span id="gpsErrors" class="diagValue">0</span></div>
+              <div class="diagRow"><span>Log file</span><span id="gpsLogFile" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Log writes</span><span id="gpsLogCount" class="diagValue">0</span></div>
+            </div>
+          </div>
+          <div class="diagCard">
+            <h3>Fix</h3>
+            <div class="diagRows">
+              <div class="diagRow"><span>Status</span><span id="gpsFix" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Satellites</span><span id="gpsSats" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Latitude</span><span id="gpsLat" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Longitude</span><span id="gpsLon" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Altitude</span><span id="gpsAlt" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Speed</span><span id="gpsSpeed" class="diagValue">--</span></div>
+              <div class="diagRow"><span>HDOP</span><span id="gpsHdop" class="diagValue">--</span></div>
+              <div class="diagRow"><span>UTC</span><span id="gpsUtc" class="diagValue">--</span></div>
+            </div>
+          </div>
+          <div class="diagCard">
+            <h3>Last sentence</h3>
+            <div class="diagEvents"><div class="diagEvent" id="gpsRaw" style="word-break:break-all">--</div></div>
+            <div style="margin-top:10px"><a id="gpsMapLink" href="#" target="_blank" rel="noopener" style="display:none">Open in map ↗</a></div>
+          </div>
+        </div>
+      </details>
+
       <details class="sectionBox">
         <summary>Click timing</summary>
         <div class="mini">Use bigger debounce numbers if one press or one click shows up many times.</div>
@@ -1088,15 +1130,55 @@
     }
 
     let diagTimer = null;
+    let gpsTimer = null;
     let diagSeq = 0;
     function startInputDiagnostics(){
       loadInputDiagnostics();
       if(!diagTimer) diagTimer = setInterval(loadInputDiagnostics, 350);
+      loadGps();
+      if(!gpsTimer) gpsTimer = setInterval(loadGps, 2000);
     }
     function stopInputDiagnostics(){
       if(diagTimer){
         clearInterval(diagTimer);
         diagTimer = null;
+      }
+      if(gpsTimer){
+        clearInterval(gpsTimer);
+        gpsTimer = null;
+      }
+    }
+    async function loadGps(){
+      let d;
+      try{ d = await api("/api/gps"); }catch(e){ return; }
+      const pill = $("gpsStatusPill"), lamp = $("gpsLamp");
+      if(!d.available){ pill.textContent = "GPS: not detected"; pill.className = "pill warn"; }
+      else if(d.receiving){ pill.textContent = "GPS: receiving"; pill.className = "pill on"; }
+      else { pill.textContent = "GPS: no data (check wiring)"; pill.className = "pill warn"; }
+      if(lamp) lamp.classList.toggle("on", !!d.receiving);
+      const fp = $("gpsFixPill");
+      if(d.fix){ fp.textContent = "fix: " + (d.fix_type===3?"3D":d.fix_type===2?"2D":"yes"); fp.className = "pill on"; }
+      else { fp.textContent = d.receiving ? "fix: searching…" : "fix: --"; fp.className = "pill warn"; }
+      const set = (id,v) => { const e = $(id); if(e) e.textContent = (v===null||v===undefined||v==="") ? "--" : v; };
+      set("gpsInterval", d.log_interval); set("gpsPortName", d.port);
+      set("gpsPort", d.port);
+      set("gpsRecv", d.receiving ? "yes" : "no");
+      set("gpsAge", d.last_data_age==null ? "--" : d.last_data_age + "s ago");
+      set("gpsSentences", d.sentences); set("gpsErrors", d.errors);
+      set("gpsLogFile", d.log_file || "--"); set("gpsLogCount", d.log_count);
+      set("gpsFix", d.fix ? ((d.fix_type===3?"3D":d.fix_type===2?"2D":"")+" fix").trim() : (d.receiving ? "searching (needs sky view)" : "no data"));
+      set("gpsSats", (d.sats_used||0) + " used / " + (d.sats_in_view||0) + " in view");
+      set("gpsLat", d.lat==null ? "--" : d.lat.toFixed(6));
+      set("gpsLon", d.lon==null ? "--" : d.lon.toFixed(6));
+      set("gpsAlt", d.alt_m==null ? "--" : d.alt_m + " m");
+      set("gpsSpeed", d.speed_kmh==null ? "--" : d.speed_kmh + " km/h");
+      set("gpsHdop", d.hdop==null ? "--" : d.hdop);
+      set("gpsUtc", d.utc || "--");
+      set("gpsRaw", d.last_sentence || "--");
+      const mp = $("gpsMapLink");
+      if(mp){
+        if(d.lat!=null && d.lon!=null){ mp.style.display=""; mp.href = "https://www.openstreetmap.org/?mlat="+d.lat+"&mlon="+d.lon+"#map=16/"+d.lat+"/"+d.lon; }
+        else { mp.style.display="none"; }
       }
     }
     function setDiagPill(id, on, label){

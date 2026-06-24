@@ -24,6 +24,13 @@ SETTINGS_FILE: Path = _env_path("TYSPEAKER_SETTINGS", DATA_DIR / "settings.json"
 HOST: str = os.environ.get("TYSPEAKER_HOST", "0.0.0.0")
 PORT: int = int(os.environ.get("TYSPEAKER_PORT", "8000"))
 
+# --- GPS (serial NMEA, e.g. GP-20U7 on the mini-UART) ----------------------
+# /dev/ttyS0 = the GPIO14/15 mini-UART (BT keeps the PL011). Empty = disabled.
+GPS_PORT: str = os.environ.get("TYSPEAKER_GPS_PORT", "/dev/ttyS0")
+GPS_BAUD: int = int(os.environ.get("TYSPEAKER_GPS_BAUD", "9600"))
+GPS_LOG_DIR: Path = _env_path("TYSPEAKER_GPS_LOG", DATA_DIR / "gps")
+GPS_LOG_INTERVAL: int = int(os.environ.get("TYSPEAKER_GPS_LOG_INTERVAL", "10"))
+
 # --- GPIO ------------------------------------------------------------------
 # BCM pin for the push button. Set to a negative value to disable GPIO
 # (e.g. when developing off-Pi). Button wires to this pin and GND (internal
