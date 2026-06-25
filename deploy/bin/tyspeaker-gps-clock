@@ -1,0 +1,16 @@
+#!/bin/sh
+# Set the system clock from a GPS-provided UNIX epoch (UTC seconds), sanity-checked.
+# Allowed for the app via a narrow sudoers grant so the Pi gets correct time
+# offline (no NTP on the bike). Install:
+#   sudo install -m755 deploy/bin/tyspeaker-gps-clock /usr/local/bin/tyspeaker-gps-clock
+#   echo 'jaysettle ALL=(root) NOPASSWD: /usr/local/bin/tyspeaker-gps-clock' \
+#     | sudo tee /etc/sudoers.d/tyspeaker-gps-clock && sudo chmod 0440 /etc/sudoers.d/tyspeaker-gps-clock
+e="$1"
+case "$e" in
+  ''|*[!0-9]*) echo "usage: tyspeaker-gps-clock <unix-epoch>"; exit 1 ;;
+esac
+# plausible range: ~2025-01-01 .. ~2036
+if [ "$e" -lt 1735689600 ] || [ "$e" -gt 2082758400 ]; then
+  echo "epoch out of range: $e"; exit 1
+fi
+/bin/date -u -s "@$e" >/dev/null

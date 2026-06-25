@@ -31,22 +31,72 @@ class _Piezo:
     on/off; an oscillating signal at resonance makes it ring loudly). Feedback
     cues are distinguished by beep COUNT and timing. No-op if not wired."""
 
-    FREQ_HZ = 2000  # measured resonant peak of this piezo (loudest)
+    FREQ_HZ = 2000  # default resonant peak of this piezo (loudest)
 
-    def __init__(self, pin: int) -> None:
+    # GPIO -> hardware-PWM channel (needs dtoverlay=pwm-2chan: 18/12 = channel 0,
+    # 19/13 = channel 1). True hardware PWM is glitch-free under CPU load;
+    # gpiozero's *software* PWM is not, which is what causes the occasional
+    # distortion. We prefer hardware PWM and fall back to gpiozero if it's not set up.
+    _HW_CHANNEL = {12: 0, 13: 1, 18: 0, 19: 1}
+
+    def __init__(self, pin: int, sys_freq: int = FREQ_HZ) -> None:
         self._pwm = None
+        self._hw = False
         self._lock = threading.Lock()
         self._cur_stop: Optional[threading.Event] = None
+        self.sys_freq = int(sys_freq) if sys_freq else self.FREQ_HZ
         if pin is None or pin < 0:
             return
+        ch = self._HW_CHANNEL.get(pin)
+        if ch is not None:
+            try:
+                from rpi_hardware_pwm import HardwarePWM
+
+                self._pwm = HardwarePWM(pwm_channel=ch, hz=self.sys_freq, chip=0)
+                self._pwm.start(0)  # 0% duty = silent
+                self._hw = True
+                log.info("piezo: hardware PWM on GPIO%s (channel %s)", pin, ch)
+                return
+            except Exception as exc:
+                log.info("piezo: hardware PWM unavailable (%s); software PWM", exc)
+                self._pwm = None
         try:
             from gpiozero import PWMOutputDevice
 
-            self._pwm = PWMOutputDevice(
-                pin, frequency=self.FREQ_HZ, initial_value=0
-            )
+            self._pwm = PWMOutputDevice(pin, frequency=self.sys_freq, initial_value=0)
         except Exception:
             self._pwm = None
+
+    @property
+    def hardware(self) -> bool:
+        return self._hw
+
+    def set_sys_freq(self, freq: float) -> int:
+        """Set the system tone (used by all the cue beeps)."""
+        self.sys_freq = max(50, min(8000, int(freq)))
+        return self.sys_freq
+
+    def _set(self, freq, duty) -> None:
+        """Drive the pin: freq Hz at duty 0..1; freq<=0 or duty 0 = silent. Works
+        on both the hardware-PWM and gpiozero backends."""
+        if self._pwm is None:
+            return
+        on = bool(freq and freq > 0 and duty and duty > 0)
+        try:
+            if self._hw:
+                if on:
+                    self._pwm.change_frequency(max(1, int(freq)))
+                    self._pwm.change_duty_cycle(duty * 100.0)
+                else:
+                    self._pwm.change_duty_cycle(0)
+            else:
+                if on:
+                    self._pwm.frequency = max(1, int(freq))
+                    self._pwm.value = duty
+                else:
+                    self._pwm.value = 0
+        except Exception:
+            pass
 
     def play_tones(self, tones) -> None:
         """Play a non-blocking sequence of (freq_hz, ms) steps; freq 0/None = a
@@ -65,20 +115,11 @@ class _Piezo:
                 for freq, ms in tones:
                     if stop.is_set():
                         return
-                    if freq and freq > 0:
-                        self._pwm.frequency = max(50, int(freq))
-                        self._pwm.value = 0.5
-                    else:
-                        self._pwm.value = 0
+                    self._set(freq, 0.5)
                     time.sleep(max(0, ms) / 1000.0)
-            except Exception:
-                pass
             finally:
                 if not stop.is_set():  # don't stomp a sequence that replaced us
-                    try:
-                        self._pwm.value = 0
-                    except Exception:
-                        pass
+                    self._set(0, 0)
 
         threading.Thread(target=_run, daemon=True).start()
 
@@ -86,10 +127,10 @@ class _Piezo:
         self.play_pattern([(ms, 0)])
 
     def play_pattern(self, pattern) -> None:
-        """[(on_ms, gap_ms), ...] beeps at the resonant frequency (loudest)."""
+        """[(on_ms, gap_ms), ...] beeps at the system tone (loudest at resonance)."""
         tones = []
         for on_ms, gap_ms in pattern:
-            tones.append((self.FREQ_HZ, on_ms))
+            tones.append((self.sys_freq, on_ms))
             if gap_ms:
                 tones.append((0, gap_ms))
         self.play_tones(tones)
@@ -347,7 +388,7 @@ def start_inputs(settings: Settings, engine: PlaybackEngine) -> Inputs:
         return handles  # not on a Pi -> no-op
     handles.gpio_available = True
 
-    piezo = _Piezo(settings.get("piezo_pin", -1))
+    piezo = _Piezo(settings.get("piezo_pin", -1), settings.get("piezo_freq", 2000))
     handles.piezo = piezo
 
     # -- rotary encoder -----------------------------------------------------

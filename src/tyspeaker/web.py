@@ -571,6 +571,23 @@ def create_app(
         piezo.play_pattern([(120, 90), (120, 0)])
         return jsonify(ok=True, wired=wired)
 
+    @app.post("/api/diagnostics/piezo_freq")
+    def api_piezo_freq():
+        piezo = getattr(inputs, "piezo", None) if inputs is not None else None
+        if piezo is None:
+            return jsonify(ok=False, error="piezo not configured"), 400
+        try:
+            freq = float(_body().get("freq"))
+        except (TypeError, ValueError):
+            return jsonify(error="freq must be a number"), 400
+        applied = piezo.set_sys_freq(freq)           # live
+        cfg.update({"piezo_freq": int(applied)})     # persisted
+        piezo.play_pattern([(150, 0)])               # confirm at the new tone
+        return jsonify(
+            ok=True, freq=applied,
+            hardware=getattr(piezo, "hardware", False),
+        )
+
     @app.get("/api/download")
     def api_download():
         try:

@@ -81,6 +81,7 @@ class GpsReader:
         diag_interval: int = 30,
         diag_keep_days: int = 14,
         get_battery=None,
+        sync_clock: bool = True,
     ) -> None:
         self.port = port
         self.baud = baud
@@ -95,6 +96,10 @@ class GpsReader:
         self.get_battery = get_battery  # callable -> power_status() dict, or None
         self._diag_file: Optional[Path] = None
         self._diag_count = 0
+        # Offline (no WiFi/NTP on the bike) the system clock can be wrong; the
+        # GPS carries exact UTC, so set the clock from the first good fix.
+        self.sync_clock = sync_clock
+        self._clock_synced = False
         # Log only a GOOD, MOVING fix. Indoors the fix is weak (few satellites,
         # high HDOP) and throws fake speeds up to ~12 mph, so speed alone leaks.
         # Satellite count is the clean discriminator: indoor jitter uses 3-6
@@ -196,6 +201,43 @@ class GpsReader:
                 handler(fields)
         except (IndexError, ValueError):
             pass
+        if not self._clock_synced and typ == "RMC":
+            self._maybe_sync_clock()
+
+    def _maybe_sync_clock(self) -> None:
+        """Set the system clock from the GPS UTC on the first good fix (offline
+        there's no NTP). Attempted once; needs the tyspeaker-gps-clock sudoers
+        helper. Harmless no-op if the clock is already close or sudo is denied."""
+        if self._clock_synced or not self.sync_clock:
+            return
+        with self._lock:
+            fix = self._state.get("fix")
+            date = self._state.get("date")  # YYYY-MM-DD (from RMC)
+            utc = self._state.get("utc")    # HH:MM:SS
+        if not (fix and date and utc):
+            return
+        self._clock_synced = True  # only attempt once per run
+        try:
+            import calendar
+            y, mo, d = (int(x) for x in date.split("-"))
+            hh, mm, ss = (int(x) for x in utc.split(":"))
+            epoch = calendar.timegm((y, mo, d, hh, mm, ss, 0, 0, 0))
+        except (ValueError, TypeError):
+            return
+        if epoch < 1735689600 or epoch > 2082758400:  # ~2025-01 .. 2036
+            return
+        drift = abs(time.time() - epoch)
+        if drift < 30:
+            log.info("GPS clock: system already within %ds of GPS", int(drift))
+            return
+        try:
+            subprocess.run(
+                ["sudo", "-n", "/usr/local/bin/tyspeaker-gps-clock", str(epoch)],
+                capture_output=True, timeout=5,
+            )
+            log.info("GPS clock: set system time from GPS (was off by %ds)", int(drift))
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.info("GPS clock set failed: %s", exc)
 
     def _gga(self, fl: List[str]) -> None:
         with self._lock:

@@ -524,6 +524,7 @@
                    style="width:140px" oninput="document.getElementById('beepFreqVal').textContent=this.value">
             <span><b id="beepFreqVal">2000</b> Hz</span>
           </label>
+          <button class="primary" onclick="setPiezoTone()" type="button">Set as tone</button>
           <button class="blue" onclick="testDroid()" type="button">🤖 Droid</button>
           <button class="ghost" onclick="toggleLogs()" type="button" id="logsBtn">Show logs</button>
         </div>
@@ -1349,6 +1350,13 @@
       try{
         const r = await api("/api/diagnostics/beep", {droid:true});
         toast(r.wired ? "Beep-boop-bweee! 🤖" : "No buzzer wired on the pin");
+      }catch(e){ toast(e.message); }
+    }
+    async function setPiezoTone(){
+      try{
+        const freq = parseInt(($("beepFreq")||{}).value || "2000", 10);
+        const r = await api("/api/diagnostics/piezo_freq", {freq});
+        toast("System tone set to " + r.freq + " Hz" + (r.hardware ? " (hardware PWM)" : " (software PWM)"));
       }catch(e){ toast(e.message); }
     }
     let _logTimer = null;

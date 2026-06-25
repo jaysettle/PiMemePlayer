@@ -1,0 +1,5 @@
+# Let the app (running as a normal user in the gpio group) drive the hardware
+# PWM sysfs without root — needed for the glitch-free piezo on GPIO19.
+# Install: sudo install -m644 deploy/udev/99-pwm-gpio.rules /etc/udev/rules.d/99-pwm-gpio.rules
+# Requires: dtparam=audio=off + dtoverlay=pwm-2chan in config.txt, and the user in 'gpio'.
+SUBSYSTEM=="pwm*", PROGRAM="/bin/sh -c 'chown -R root:gpio /sys/class/pwm 2>/dev/null; chmod -R 770 /sys/class/pwm 2>/dev/null; chown -R root:gpio /sys/devices/platform/soc/*.pwm/pwm/pwmchip* 2>/dev/null; chmod -R 770 /sys/devices/platform/soc/*.pwm/pwm/pwmchip* 2>/dev/null'"

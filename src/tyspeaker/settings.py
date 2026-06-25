@@ -26,6 +26,7 @@ DEFAULTS: Dict[str, Any] = {
     "encoder_dt": -1,            # rotary encoder pin B
     "encoder_sw": -1,            # encoder's push switch (if separate)
     "piezo_pin": -1,             # piezo buzzer for feedback
+    "piezo_freq": 2000,          # system tone (Hz) for all the cue beeps
     # input behaviour
     "double_click_ms": 350,
     "long_press_ms": 700,
