@@ -182,6 +182,7 @@ CUE_RANDOM = [(70, 90), (70, 90), (70, 0)]    # double -> random: 3 beeps
 CUE_WRAP = [(320, 0)]                         # looped back to #1: 1 long beep
 CUE_VOL_UP = [(45, 0)]                         # turn: 1 quick tick
 CUE_VOL_DOWN = [(45, 0)]                       # turn: 1 quick tick
+CUE_HOTSPOT = [(60, 60), (60, 60), (60, 60), (260, 0)]  # triple -> hotspot: 3 quick + 1 long
 
 
 class _ClickHandler:
@@ -194,14 +195,17 @@ class _ClickHandler:
         on_double,
         on_long,
         diagnostics: "Inputs",
+        on_triple=None,
     ) -> None:
         self._double_s = settings.get("double_click_ms", 350) / 1000
         self._on_short = on_short
         self._on_double = on_double
         self._on_long = on_long
+        self._on_triple = on_triple
         self._diagnostics = diagnostics
         self._held = False
-        self._pending: Optional[threading.Timer] = None
+        self._count = 0
+        self._timer: Optional[threading.Timer] = None
 
     def attach(self, button) -> None:
         button.when_pressed = self._pressed_cb
@@ -213,6 +217,10 @@ class _ClickHandler:
 
     def _held_cb(self) -> None:
         self._held = True
+        self._count = 0
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
         self._diagnostics.note_button("held")
         self._safe(self._on_long)
 
@@ -221,20 +229,28 @@ class _ClickHandler:
         if self._held:
             self._held = False
             return
-        if self._pending is not None:
-            self._pending.cancel()
-            self._pending = None
+        # Count clicks within the window, then dispatch single/double/triple
+        # (triple = hotspot toggle, so double now waits for a possible 3rd click).
+        self._count += 1
+        if self._timer is not None:
+            self._timer.cancel()
+        self._timer = threading.Timer(self._double_s, self._dispatch)
+        self._timer.daemon = True
+        self._timer.start()
+
+    def _dispatch(self) -> None:
+        n = self._count
+        self._count = 0
+        self._timer = None
+        if self._on_triple is not None and n >= 3:
+            self._diagnostics.note_button("triple")
+            self._safe(self._on_triple)
+        elif n >= 2:
             self._diagnostics.note_button("double")
             self._safe(self._on_double)
         else:
-            self._pending = threading.Timer(self._double_s, self._fire_single)
-            self._pending.daemon = True
-            self._pending.start()
-
-    def _fire_single(self) -> None:
-        self._pending = None
-        self._diagnostics.note_button("short")
-        self._safe(self._on_short)
+            self._diagnostics.note_button("short")
+            self._safe(self._on_short)
 
     @staticmethod
     def _safe(fn) -> None:
@@ -269,6 +285,7 @@ class Inputs:
             "held": 0,
             "short": 0,
             "double": 0,
+            "triple": 0,
         }
         self._last_encoder_direction = ""
         self._last_button_event = ""
@@ -467,7 +484,16 @@ def start_inputs(settings: Settings, engine: PlaybackEngine) -> Inputs:
                 else:
                     engine.step_and_play(+1)
 
-            _ClickHandler(settings, short, double, long, handles).attach(btn)
+            def triple() -> None:
+                # Triple-tap = toggle the Wi-Fi hotspot (so a phone can connect to
+                # the Pi on the ride). Reverts on the next triple-tap or a reboot.
+                from . import hotspot
+                hotspot.toggle()
+                piezo.play_pattern(CUE_HOTSPOT)
+
+            _ClickHandler(
+                settings, short, double, long, handles, on_triple=triple
+            ).attach(btn)
             handles.button = btn
         except Exception as exc:
             handles.note_error("button", exc)

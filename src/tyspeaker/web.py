@@ -14,6 +14,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from . import config
 from .bluetooth import BluetoothAutoConnector, BluetoothManager, normalize_mac
 from .engine import PlaybackEngine
+from . import hotspot
 from .gps import GpsReader
 from .gps_stats import GpsStats
 from .inputs import start_inputs
@@ -490,6 +491,19 @@ def create_app(
             n = 300
         entries = gps.recent_diag(n) if gps is not None else []
         return jsonify(entries=entries, count=len(entries))
+
+    @app.get("/api/hotspot")
+    def api_hotspot_status():
+        return jsonify(available=hotspot.available(), state=hotspot.status())
+
+    @app.post("/api/hotspot")
+    def api_hotspot_set():
+        body = _body()
+        if "on" in body:
+            hotspot.set_hotspot(bool(body.get("on")))
+            return jsonify(ok=True, requested="on" if body.get("on") else "off")
+        hotspot.toggle()
+        return jsonify(ok=True, requested="toggle")
 
     @app.post("/api/gps/override")
     def api_gps_override():

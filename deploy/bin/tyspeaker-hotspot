@@ -1,0 +1,21 @@
+#!/bin/sh
+# Toggle the Pi between home Wi-Fi (client) and its own AP hotspot.
+#
+# The hotspot SSID/password live ONLY in the NetworkManager profile 'tyhotspot'
+# (created on the Pi, never in this repo). The AP profile is autoconnect=no, so a
+# reboot always reverts to home Wi-Fi — that's the safety net.
+#
+# Allowed for the app via a narrow sudoers grant:
+#   jaysettle ALL=(root) NOPASSWD: /usr/local/bin/tyspeaker-hotspot
+HOME_CONN="preconfigured"
+AP_CONN="tyhotspot"
+
+is_ap() { nmcli -t -f NAME connection show --active 2>/dev/null | grep -qx "$AP_CONN"; }
+
+case "$1" in
+  on)     exec nmcli connection up "$AP_CONN" ;;
+  off)    exec nmcli connection up "$HOME_CONN" ;;
+  status) if is_ap; then echo on; else echo off; fi ;;
+  toggle) if is_ap; then exec nmcli connection up "$HOME_CONN"; else exec nmcli connection up "$AP_CONN"; fi ;;
+  *)      echo "usage: tyspeaker-hotspot on|off|toggle|status"; exit 1 ;;
+esac

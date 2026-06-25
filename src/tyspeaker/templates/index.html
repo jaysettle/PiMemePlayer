@@ -424,6 +424,12 @@
           <button class="ghost danger" id="ovOff" onclick="setGpsOverride('off')" type="button">Force OFF</button>
         </div>
         <div class="mini" style="margin-top:6px">Auto records whenever you've been away from home Wi-Fi for &gt;10s (including on the Pi's hotspot). Force ON/OFF override that, and snap back to Auto when you reconnect to the home network.</div>
+        <div class="row" style="margin-top:10px; align-items:center; gap:10px">
+          <b>Hotspot</b>
+          <span id="hsState" class="pill">—</span>
+          <span class="mini">SSID <code>tyspeaker</code> — connect a phone on the ride (triple-tap the button does this too).</span>
+          <button class="ghost" id="hsBtn" onclick="toggleHotspot()" type="button" style="margin-left:auto">Toggle hotspot</button>
+        </div>
       </div>
 
       <details class="sectionBox" open style="margin-top:14px">
@@ -761,7 +767,7 @@
         stopBtLogs();
       }
       if(name === "gps"){
-        loadGpsDays(); loadGpsLogState();
+        loadGpsDays(); loadGpsLogState(); loadHotspot();
         if(!gpsLogTimer) gpsLogTimer = setInterval(loadGpsLogState, 3000);
       } else if(gpsLogTimer){ clearInterval(gpsLogTimer); gpsLogTimer = null; }
       if(name === "config"){
@@ -1565,6 +1571,22 @@
         toast("Logging override: " + r.log_override.toUpperCase());
         loadGpsLogState();
       }catch(e){ toast(e.message); }
+    }
+    async function loadHotspot(){
+      try{
+        const d = await api("/api/hotspot");
+        const st = $("hsState");
+        if(!st) return;
+        if(!d.available){ st.textContent = "not set up"; st.className = "pill warn"; return; }
+        st.textContent = d.state==="on" ? "● ON (tyspeaker)" : (d.state==="off" ? "○ off" : "?");
+        st.className = d.state==="on" ? "pill on" : "pill";
+      }catch(e){}
+    }
+    async function toggleHotspot(){
+      if(!confirm("Toggle the Wi-Fi hotspot?\n\nTurning it ON makes the Pi leave home Wi-Fi and broadcast 'tyspeaker' — this page goes unreachable until you connect a device to 'tyspeaker' (then open http://10.42.0.1:8000). It reverts on the next triple-tap or a reboot.")) return;
+      try{ await api("/api/hotspot", {}); toast("Hotspot toggling…"); }
+      catch(e){ toast("Toggling — connection dropping (expected if it went ON)"); }
+      setTimeout(loadHotspot, 2500);
     }
     function fmtDur(s){
       s = Math.round(s || 0);
