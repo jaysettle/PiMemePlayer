@@ -32,6 +32,7 @@ DEFAULTS: Dict[str, Any] = {
     "button_bounce_ms": 60,
     "encoder_bounce_ms": 3,
     "encoder_role": "select",    # "select" (rotate cycles samples) | "volume"
+    "gps_log_min_mph": 3.0,      # only log GPS when moving >= this (skips jitter)
 }
 
 # Settings that only take effect after a service restart (GPIO devices).
@@ -95,6 +96,11 @@ class Settings:
         default = DEFAULTS[key]
         if isinstance(default, bool):
             return bool(value)
+        if isinstance(default, float):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
         if isinstance(default, int):
             try:
                 return int(value)

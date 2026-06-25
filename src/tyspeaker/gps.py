@@ -75,11 +75,17 @@ class GpsReader:
         baud: int = 9600,
         log_dir: Optional[Path] = None,
         log_interval: int = 10,
+        min_log_mph: float = 3.0,
     ) -> None:
         self.port = port
         self.baud = baud
         self.log_dir = Path(log_dir) if log_dir else None
         self.log_interval = max(2, int(log_interval))
+        # Only log when actually moving this fast (mph). Indoors the position
+        # jitter drifts 150-850 ft from home but its speed stays ~0, so a speed
+        # gate cleanly skips stationary noise + no-fix records. Live-tunable.
+        self.min_log_mph = float(min_log_mph)
+        self._skipped = 0
         self._state: Dict[str, Any] = self._blank_state()
         self._raw: "deque[str]" = deque(maxlen=24)
         self._lock = threading.Lock()
@@ -237,6 +243,12 @@ class GpsReader:
         with self._lock:
             snap = dict(self._state)
             raw = list(self._raw)
+        # Movement gate: only log a real, moving fix. Skips no-fix records and
+        # stationary jitter (the big space saver + noise filter).
+        speed_mph = (snap.get("speed_kmh") or 0.0) * 0.621371
+        if not snap.get("fix") or speed_mph < self.min_log_mph:
+            self._skipped += 1
+            return
         lt = time.localtime(now)
         raw_dir = self.log_dir / "raw"
         raw_dir.mkdir(parents=True, exist_ok=True)
@@ -277,5 +289,7 @@ class GpsReader:
             "log_file": self._log_file.name if self._log_file else None,
             "log_count": self._log_count,
             "log_interval": self.log_interval,
+            "min_log_mph": round(self.min_log_mph, 1),
+            "skipped_logs": self._skipped,
             **snap,
         }

@@ -570,11 +570,18 @@
       <details class="sectionBox" open>
         <summary>GPS</summary>
         <div class="mini">Serial GPS on <code id="gpsPortName">/dev/ttyS0</code>, logged to the SD card every <span id="gpsInterval">10</span>s. A position fix needs a clear view of the sky — indoors it shows "searching".</div>
-        <div class="row" style="margin-top:12px; flex-wrap:wrap">
+        <div class="row" style="margin-top:12px; flex-wrap:wrap; align-items:center">
           <span id="gpsStatusPill" class="pill">GPS: --</span>
           <span id="gpsFixPill" class="pill">fix: --</span>
           <button class="ghost" onclick="loadGps()" type="button">Refresh</button>
+          <label class="mini" style="display:flex; align-items:center; gap:6px; margin-left:auto">
+            Only log above
+            <input type="number" id="gpsMinMph" min="0" max="50" step="0.5" value="3" style="width:64px">
+            mph
+            <button class="blue" onclick="saveGpsMinMph()" type="button">Set</button>
+          </label>
         </div>
+        <div class="mini" style="margin-top:6px">Skips parked-at-home jitter and saves SD space — indoors the GPS drifts up to ~850&nbsp;ft, but its speed stays near 0, so we only record when actually riding.</div>
         <div class="diagGrid" style="margin-top:12px">
           <div class="diagCard">
             <h3>Module <span id="gpsLamp" class="diagLamp"></span></h3>
@@ -586,6 +593,8 @@
               <div class="diagRow"><span>Read errors</span><span id="gpsErrors" class="diagValue">0</span></div>
               <div class="diagRow"><span>Log file</span><span id="gpsLogFile" class="diagValue">--</span></div>
               <div class="diagRow"><span>Log writes</span><span id="gpsLogCount" class="diagValue">0</span></div>
+              <div class="diagRow"><span>Log threshold</span><span id="gpsMinMphVal" class="diagValue">--</span></div>
+              <div class="diagRow"><span>Skipped (jitter)</span><span id="gpsSkipped" class="diagValue">0</span></div>
             </div>
           </div>
           <div class="diagCard">
@@ -1227,6 +1236,10 @@
       set("gpsAge", d.last_data_age==null ? "--" : d.last_data_age + "s ago");
       set("gpsSentences", d.sentences); set("gpsErrors", d.errors);
       set("gpsLogFile", d.log_file || "--"); set("gpsLogCount", d.log_count);
+      set("gpsMinMphVal", d.min_log_mph==null ? "--" : ("≥ " + d.min_log_mph + " mph"));
+      set("gpsSkipped", d.skipped_logs==null ? 0 : d.skipped_logs);
+      const mphIn = $("gpsMinMph");
+      if(mphIn && d.min_log_mph!=null && document.activeElement !== mphIn) mphIn.value = d.min_log_mph;
       set("gpsFix", d.fix ? ((d.fix_type===3?"3D":d.fix_type===2?"2D":"")+" fix").trim() : (d.receiving ? "searching (needs sky view)" : "no data"));
       set("gpsSats", (d.sats_used||0) + " used / " + (d.sats_in_view||0) + " in view");
       set("gpsLat", d.lat==null ? "--" : d.lat.toFixed(6));
@@ -1241,6 +1254,15 @@
         if(d.lat!=null && d.lon!=null){ mp.style.display=""; mp.href = "https://www.openstreetmap.org/?mlat="+d.lat+"&mlon="+d.lon+"#map=16/"+d.lat+"/"+d.lon; }
         else { mp.style.display="none"; }
       }
+    }
+    async function saveGpsMinMph(){
+      const v = parseFloat(($("gpsMinMph")||{}).value);
+      if(isNaN(v)){ toast("Enter a number"); return; }
+      try{
+        const r = await api("/api/gps/config", {min_mph:v});
+        toast("Now logging only above " + r.min_log_mph + " mph");
+        loadGps();
+      }catch(e){ toast(e.message); }
     }
     function setDiagPill(id, on, label){
       const el = $(id);

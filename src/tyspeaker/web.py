@@ -316,6 +316,7 @@ def create_app(
         GpsReader(
             config.GPS_PORT, config.GPS_BAUD,
             config.GPS_LOG_DIR, config.GPS_LOG_INTERVAL,
+            min_log_mph=float(cfg.get("gps_log_min_mph", 3.0)),
         ).start()
         if config.GPS_PORT
         else None
@@ -442,6 +443,17 @@ def create_app(
         if gps is not None:
             return jsonify(gps.status())
         return jsonify(available=False, receiving=False, port=config.GPS_PORT)
+
+    @app.post("/api/gps/config")
+    def api_gps_config():
+        try:
+            mph = max(0.0, min(50.0, float(_body().get("min_mph"))))
+        except (TypeError, ValueError):
+            return jsonify(error="min_mph must be a number"), 400
+        cfg.update({"gps_log_min_mph": mph})
+        if gps is not None:
+            gps.min_log_mph = mph
+        return jsonify(ok=True, min_log_mph=mph)
 
     @app.get("/api/gps/days")
     def api_gps_days():
