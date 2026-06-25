@@ -26,7 +26,8 @@ log = get_logger("gps_stats")
 
 _MI_PER_KM = 0.621371
 _MIN_MOVE_KMH = 1.5       # below this between fixes = GPS drift while stopped
-_MAX_PLAUSIBLE_KMH = 60   # above this between fixes = a GPS jump, ignore
+_MAX_PLAUSIBLE_KMH = 25   # above this between fixes = a GPS jump (a kid scooter
+                          # tops ~15 mph); ignore the segment as jitter
 _MOVING_KMH = 2.0         # "actually riding" threshold for moving time
 
 

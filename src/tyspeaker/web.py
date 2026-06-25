@@ -317,6 +317,8 @@ def create_app(
             config.GPS_PORT, config.GPS_BAUD,
             config.GPS_LOG_DIR, config.GPS_LOG_INTERVAL,
             min_log_mph=float(cfg.get("gps_log_min_mph", 3.0)),
+            min_log_sats=int(cfg.get("gps_log_min_sats", 7)),
+            max_log_hdop=float(cfg.get("gps_log_max_hdop", 3.0)),
         ).start()
         if config.GPS_PORT
         else None
@@ -446,14 +448,36 @@ def create_app(
 
     @app.post("/api/gps/config")
     def api_gps_config():
-        try:
-            mph = max(0.0, min(50.0, float(_body().get("min_mph"))))
-        except (TypeError, ValueError):
-            return jsonify(error="min_mph must be a number"), 400
-        cfg.update({"gps_log_min_mph": mph})
-        if gps is not None:
-            gps.min_log_mph = mph
-        return jsonify(ok=True, min_log_mph=mph)
+        body = _body()
+        out = {}
+        if body.get("min_mph") is not None:
+            try:
+                mph = max(0.0, min(50.0, float(body.get("min_mph"))))
+            except (TypeError, ValueError):
+                return jsonify(error="min_mph must be a number"), 400
+            cfg.update({"gps_log_min_mph": mph})
+            if gps is not None:
+                gps.min_log_mph = mph
+            out["min_log_mph"] = mph
+        if body.get("min_sats") is not None:
+            try:
+                sats = max(0, min(20, int(float(body.get("min_sats")))))
+            except (TypeError, ValueError):
+                return jsonify(error="min_sats must be a number"), 400
+            cfg.update({"gps_log_min_sats": sats})
+            if gps is not None:
+                gps.min_log_sats = sats
+            out["min_log_sats"] = sats
+        if body.get("max_hdop") is not None:
+            try:
+                hd = max(0.5, min(50.0, float(body.get("max_hdop"))))
+            except (TypeError, ValueError):
+                return jsonify(error="max_hdop must be a number"), 400
+            cfg.update({"gps_log_max_hdop": hd})
+            if gps is not None:
+                gps.max_log_hdop = hd
+            out["max_log_hdop"] = hd
+        return jsonify(ok=True, **out)
 
     @app.get("/api/gps/days")
     def api_gps_days():

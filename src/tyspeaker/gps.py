@@ -76,15 +76,20 @@ class GpsReader:
         log_dir: Optional[Path] = None,
         log_interval: int = 10,
         min_log_mph: float = 3.0,
+        min_log_sats: int = 7,
+        max_log_hdop: float = 3.0,
     ) -> None:
         self.port = port
         self.baud = baud
         self.log_dir = Path(log_dir) if log_dir else None
         self.log_interval = max(2, int(log_interval))
-        # Only log when actually moving this fast (mph). Indoors the position
-        # jitter drifts 150-850 ft from home but its speed stays ~0, so a speed
-        # gate cleanly skips stationary noise + no-fix records. Live-tunable.
+        # Log only a GOOD, MOVING fix. Indoors the fix is weak (few satellites,
+        # high HDOP) and throws fake speeds up to ~12 mph, so speed alone leaks.
+        # Satellite count is the clean discriminator: indoor jitter uses 3-6
+        # sats, a real outdoor ride uses 8-12. All live-tunable.
         self.min_log_mph = float(min_log_mph)
+        self.min_log_sats = int(min_log_sats)
+        self.max_log_hdop = float(max_log_hdop)
         self._skipped = 0
         self._state: Dict[str, Any] = self._blank_state()
         self._raw: "deque[str]" = deque(maxlen=24)
@@ -243,10 +248,20 @@ class GpsReader:
         with self._lock:
             snap = dict(self._state)
             raw = list(self._raw)
-        # Movement gate: only log a real, moving fix. Skips no-fix records and
-        # stationary jitter (the big space saver + noise filter).
+        # Quality + movement gate: only log a GOOD, MOVING fix. Requires enough
+        # satellites and low HDOP (kills indoor multipath jitter, which is weak
+        # and few-sat) AND real speed (skips parked + no-fix records).
         speed_mph = (snap.get("speed_kmh") or 0.0) * 0.621371
-        if not snap.get("fix") or speed_mph < self.min_log_mph:
+        sats = snap.get("sats_used") or 0
+        hdop = snap.get("hdop")
+        good = (
+            snap.get("fix")
+            and sats >= self.min_log_sats
+            and hdop is not None
+            and hdop <= self.max_log_hdop
+            and speed_mph >= self.min_log_mph
+        )
+        if not good:
             self._skipped += 1
             return
         lt = time.localtime(now)
@@ -290,6 +305,8 @@ class GpsReader:
             "log_count": self._log_count,
             "log_interval": self.log_interval,
             "min_log_mph": round(self.min_log_mph, 1),
+            "min_log_sats": self.min_log_sats,
+            "max_log_hdop": round(self.max_log_hdop, 1),
             "skipped_logs": self._skipped,
             **snap,
         }

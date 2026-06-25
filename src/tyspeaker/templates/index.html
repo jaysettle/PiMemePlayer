@@ -575,14 +575,14 @@
           <span id="gpsStatusPill" class="pill">GPS: --</span>
           <span id="gpsFixPill" class="pill">fix: --</span>
           <button class="ghost" onclick="loadGps()" type="button">Refresh</button>
-          <label class="mini" style="display:flex; align-items:center; gap:6px; margin-left:auto">
-            Only log above
-            <input type="number" id="gpsMinMph" min="0" max="50" step="0.5" value="3" style="width:64px">
-            mph
+          <label class="mini" style="display:flex; align-items:center; gap:6px; margin-left:auto; flex-wrap:wrap">
+            Log only when ≥
+            <input type="number" id="gpsMinMph" min="0" max="50" step="0.5" value="3" style="width:56px"> mph &amp; ≥
+            <input type="number" id="gpsMinSats" min="0" max="20" step="1" value="7" style="width:48px"> sats
             <button class="blue" onclick="saveGpsMinMph()" type="button">Set</button>
           </label>
         </div>
-        <div class="mini" style="margin-top:6px">Skips parked-at-home jitter and saves SD space — indoors the GPS drifts up to ~850&nbsp;ft, but its speed stays near 0, so we only record when actually riding.</div>
+        <div class="mini" style="margin-top:6px">Skips parked-at-home jitter and saves SD space. Indoors the fix is weak (few satellites) and drifts up to ~850&nbsp;ft with fake speeds, so we only record a strong, moving fix — enough satellites is the reliable "he's actually outside" signal.</div>
         <div class="diagGrid" style="margin-top:12px">
           <div class="diagCard">
             <h3>Module <span id="gpsLamp" class="diagLamp"></span></h3>
@@ -1237,10 +1237,12 @@
       set("gpsAge", d.last_data_age==null ? "--" : d.last_data_age + "s ago");
       set("gpsSentences", d.sentences); set("gpsErrors", d.errors);
       set("gpsLogFile", d.log_file || "--"); set("gpsLogCount", d.log_count);
-      set("gpsMinMphVal", d.min_log_mph==null ? "--" : ("≥ " + d.min_log_mph + " mph"));
+      set("gpsMinMphVal", d.min_log_mph==null ? "--" : ("≥" + d.min_log_mph + " mph · ≥" + (d.min_log_sats==null?"?":d.min_log_sats) + " sats · HDOP≤" + (d.max_log_hdop==null?"?":d.max_log_hdop)));
       set("gpsSkipped", d.skipped_logs==null ? 0 : d.skipped_logs);
       const mphIn = $("gpsMinMph");
       if(mphIn && d.min_log_mph!=null && document.activeElement !== mphIn) mphIn.value = d.min_log_mph;
+      const satsIn = $("gpsMinSats");
+      if(satsIn && d.min_log_sats!=null && document.activeElement !== satsIn) satsIn.value = d.min_log_sats;
       set("gpsFix", d.fix ? ((d.fix_type===3?"3D":d.fix_type===2?"2D":"")+" fix").trim() : (d.receiving ? "searching (needs sky view)" : "no data"));
       set("gpsSats", (d.sats_used||0) + " used / " + (d.sats_in_view||0) + " in view");
       set("gpsLat", d.lat==null ? "--" : d.lat.toFixed(6));
@@ -1257,11 +1259,15 @@
       }
     }
     async function saveGpsMinMph(){
-      const v = parseFloat(($("gpsMinMph")||{}).value);
-      if(isNaN(v)){ toast("Enter a number"); return; }
+      const mph = parseFloat(($("gpsMinMph")||{}).value);
+      const sats = parseInt(($("gpsMinSats")||{}).value, 10);
+      if(isNaN(mph) && isNaN(sats)){ toast("Enter a number"); return; }
       try{
-        const r = await api("/api/gps/config", {min_mph:v});
-        toast("Now logging only above " + r.min_log_mph + " mph");
+        const body = {};
+        if(!isNaN(mph)) body.min_mph = mph;
+        if(!isNaN(sats)) body.min_sats = sats;
+        const r = await api("/api/gps/config", body);
+        toast("Logging only when ≥ " + r.min_log_mph + " mph & ≥ " + r.min_log_sats + " sats");
         loadGps();
       }catch(e){ toast(e.message); }
     }
