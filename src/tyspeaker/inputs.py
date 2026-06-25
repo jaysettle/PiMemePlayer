@@ -13,6 +13,7 @@ The piezo chirps for selection ticks and confirmations.
 
 from __future__ import annotations
 
+import random
 import threading
 import time
 from typing import Any, Dict, Optional
@@ -34,6 +35,8 @@ class _Piezo:
 
     def __init__(self, pin: int) -> None:
         self._pwm = None
+        self._lock = threading.Lock()
+        self._cur_stop: Optional[threading.Event] = None
         if pin is None or pin < 0:
             return
         try:
@@ -45,45 +48,76 @@ class _Piezo:
         except Exception:
             self._pwm = None
 
+    def play_tones(self, tones) -> None:
+        """Play a non-blocking sequence of (freq_hz, ms) steps; freq 0/None = a
+        silent gap. All piezo output funnels through here, and starting a new
+        sequence cancels any one still playing (so rapid presses don't garble)."""
+        if self._pwm is None:
+            return
+        with self._lock:
+            if self._cur_stop is not None:
+                self._cur_stop.set()
+            stop = threading.Event()
+            self._cur_stop = stop
+
+        def _run() -> None:
+            try:
+                for freq, ms in tones:
+                    if stop.is_set():
+                        return
+                    if freq and freq > 0:
+                        self._pwm.frequency = max(50, int(freq))
+                        self._pwm.value = 0.5
+                    else:
+                        self._pwm.value = 0
+                    time.sleep(max(0, ms) / 1000.0)
+            except Exception:
+                pass
+            finally:
+                if not stop.is_set():  # don't stomp a sequence that replaced us
+                    try:
+                        self._pwm.value = 0
+                    except Exception:
+                        pass
+
+        threading.Thread(target=_run, daemon=True).start()
+
     def beep(self, ms: int = 60) -> None:
         self.play_pattern([(ms, 0)])
 
     def play_pattern(self, pattern) -> None:
-        """Play a non-blocking sequence of (on_ms, gap_ms) beeps, each a burst
-        of the resonant square wave at 50% duty (loudest)."""
-        if self._pwm is None:
-            return
-
-        def _run() -> None:
-            try:
-                for on_ms, gap_ms in pattern:
-                    self._pwm.frequency = self.FREQ_HZ
-                    self._pwm.value = 0.5
-                    time.sleep(on_ms / 1000)
-                    self._pwm.value = 0
-                    if gap_ms:
-                        time.sleep(gap_ms / 1000)
-            except Exception:
-                pass
-
-        threading.Thread(target=_run, daemon=True).start()
+        """[(on_ms, gap_ms), ...] beeps at the resonant frequency (loudest)."""
+        tones = []
+        for on_ms, gap_ms in pattern:
+            tones.append((self.FREQ_HZ, on_ms))
+            if gap_ms:
+                tones.append((0, gap_ms))
+        self.play_tones(tones)
 
     def tone(self, freq_hz: float, ms: int = 70) -> None:
-        """Beep a single tone at an arbitrary frequency (non-blocking). Used for
-        volume feedback where pitch maps to the level."""
+        """A single tone at an arbitrary frequency (e.g. volume-pitch feedback)."""
+        self.play_tones([(freq_hz, ms)])
+
+    def droid(self) -> None:
+        """A short C-3PO / R2-D2-style chatter: quick boops + warbling whistle
+        sweeps, lightly randomized each time so it sounds 'alive'. Non-blocking."""
         if self._pwm is None:
             return
 
-        def _run() -> None:
-            try:
-                self._pwm.frequency = max(50, int(freq_hz))
-                self._pwm.value = 0.5
-                time.sleep(ms / 1000)
-                self._pwm.value = 0
-            except Exception:
-                pass
+        def sweep(f1, f2, ms, steps=12):
+            return [(f1 + (f2 - f1) * i / (steps - 1), ms / steps) for i in range(steps)]
 
-        threading.Thread(target=_run, daemon=True).start()
+        def boop():
+            return [(random.randint(1200, 2600), random.randint(40, 80))]
+
+        seq = boop() + boop()
+        seq += sweep(random.randint(1100, 1400), random.randint(2300, 2700), random.randint(90, 150))
+        seq += [(0, 25)] + boop()
+        seq += sweep(random.randint(2300, 2700), random.randint(1100, 1400), random.randint(80, 130))
+        seq += [(0, 20)] + boop() + boop()
+        if random.random() < 0.5:
+            seq += [(0, 20)] + sweep(1500, 2500, 80) + [(random.randint(1300, 1700), 50)]
+        self.play_tones(seq)
 
 
 # Volume feedback: map the volume level (0..100) to a piezo pitch so the kid
@@ -382,17 +416,15 @@ def start_inputs(settings: Settings, engine: PlaybackEngine) -> Inputs:
                 piezo.play_pattern(CUE_RANDOM)
 
             def long() -> None:
-                # Hold = advance and play. Respects shuffle ("random") mode so
-                # turning Random on actually changes the kid's main "next" gesture:
-                # random -> a surprise clip; sequential -> the next in order.
+                # Hold = the droid "talks" — a C-3PO/R2-D2 chatter on the piezo —
+                # AND advances + plays the meme on the speaker (piezo and the BT
+                # speaker are separate, so both happen at once). Respects shuffle:
+                # random clip when on, next in order when off.
+                piezo.droid()
                 if settings.get("mode", "sequential") == "random":
                     engine.play_random()
-                    piezo.play_pattern(CUE_RANDOM)
                 else:
-                    res = engine.step_and_play(+1)
-                    piezo.play_pattern(
-                        CUE_WRAP if (res and res.get("wrapped")) else CUE_NEXT
-                    )
+                    engine.step_and_play(+1)
 
             _ClickHandler(settings, short, double, long, handles).attach(btn)
             handles.button = btn

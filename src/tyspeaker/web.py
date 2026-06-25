@@ -522,7 +522,11 @@ def create_app(
         if piezo is None:
             return jsonify(ok=False, error="piezo not configured"), 400
         wired = getattr(piezo, "_pwm", None) is not None
-        freq = _body().get("freq")
+        body = _body()
+        if body.get("droid"):
+            piezo.droid()  # C-3PO/R2-D2 chatter
+            return jsonify(ok=True, wired=wired, droid=True)
+        freq = body.get("freq")
         if freq:
             try:
                 piezo.tone(float(freq), 250)  # single beep at the chosen pitch
