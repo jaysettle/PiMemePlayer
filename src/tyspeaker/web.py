@@ -320,6 +320,8 @@ def create_app(
             min_log_sats=int(cfg.get("gps_log_min_sats", 7)),
             max_log_hdop=float(cfg.get("gps_log_max_hdop", 3.0)),
             get_battery=power_status,
+            home_prefix=str(cfg.get("gps_home_prefix", "192.168.3.")),
+            away_debounce_s=int(cfg.get("gps_away_debounce_s", 10)),
         ).start()
         if config.GPS_PORT
         else None
@@ -488,6 +490,14 @@ def create_app(
             n = 300
         entries = gps.recent_diag(n) if gps is not None else []
         return jsonify(entries=entries, count=len(entries))
+
+    @app.post("/api/gps/override")
+    def api_gps_override():
+        mode = str(_body().get("mode", "")).lower()
+        if mode not in ("auto", "on", "off"):
+            return jsonify(error="mode must be auto|on|off"), 400
+        applied = gps.set_override(mode) if gps is not None else "auto"
+        return jsonify(ok=True, log_override=applied)
 
     @app.get("/api/gps/days")
     def api_gps_days():

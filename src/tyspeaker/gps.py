@@ -68,6 +68,19 @@ def _ddmmyy(v: str) -> Optional[str]:
     return f"20{v[4:6]}-{v[2:4]}-{v[0:2]}" if v and len(v) >= 6 else None
 
 
+def home_ip_present(prefix: str = "192.168.3.") -> bool:
+    """True if any local IP is on the home subnet (i.e. we're on home Wi-Fi).
+    In AP/hotspot mode or off-Wi-Fi the IP isn't on that subnet -> 'away'.
+    Fails safe to True (home) so a broken check never logs garbage."""
+    try:
+        out = subprocess.run(
+            ["hostname", "-I"], capture_output=True, text=True, timeout=3
+        ).stdout
+        return any(ip.startswith(prefix) for ip in out.split())
+    except (OSError, subprocess.SubprocessError):
+        return True
+
+
 class GpsReader:
     def __init__(
         self,
@@ -82,6 +95,8 @@ class GpsReader:
         diag_keep_days: int = 14,
         get_battery=None,
         sync_clock: bool = True,
+        home_prefix: str = "192.168.3.",
+        away_debounce_s: int = 10,
     ) -> None:
         self.port = port
         self.baud = baud
@@ -100,6 +115,14 @@ class GpsReader:
         # GPS carries exact UTC, so set the clock from the first good fix.
         self.sync_clock = sync_clock
         self._clock_synced = False
+        # Logging is driven by NETWORK STATE: record the track when we've been
+        # OFF the home Wi-Fi subnet for > away_debounce seconds (i.e. out riding,
+        # incl. when on the Pi's own hotspot). A manual override forces it.
+        self.home_prefix = home_prefix
+        self.away_debounce = max(0, int(away_debounce_s))
+        self.log_override = "auto"   # "auto" | "on" | "off" (runtime; resets at home)
+        self._home_now = True
+        self._away_since: Optional[float] = None
         # Log only a GOOD, MOVING fix. Indoors the fix is weak (few satellites,
         # high HDOP) and throws fake speeds up to ~12 mph, so speed alone leaks.
         # Satellite count is the clean discriminator: indoor jitter uses 3-6
@@ -142,6 +165,7 @@ class GpsReader:
             log.info("GPS port %s not present — GPS disabled", self.port)
             return self
         threading.Thread(target=self._read_loop, daemon=True).start()
+        threading.Thread(target=self._net_loop, daemon=True).start()
         if self.log_dir is not None:
             threading.Thread(target=self._log_loop, daemon=True).start()
             threading.Thread(target=self._diag_loop, daemon=True).start()
@@ -325,20 +349,57 @@ class GpsReader:
         self._log_file = fname
         self._log_count += 1
 
+    # -- network-driven logging --------------------------------------------
+    def _net_loop(self) -> None:
+        while not self._stop.wait(3.0):
+            try:
+                self._update_net()
+            except Exception as exc:
+                log.debug("net poll error: %s", exc)
+
+    def _update_net(self) -> None:
+        home = home_ip_present(self.home_prefix)
+        now = time.monotonic()
+        was_home = self._home_now
+        self._home_now = home
+        if home:
+            self._away_since = None
+            # Reset the override only on the away->home TRANSITION (coming back
+            # from a ride), not continuously — so you can still force it at home.
+            if not was_home and self.log_override != "auto":
+                log.info("home network back; GPS override reset to auto")
+                self.log_override = "auto"
+        elif self._away_since is None:
+            self._away_since = now
+
+    def away_seconds(self) -> float:
+        if self._home_now or self._away_since is None:
+            return 0.0
+        return time.monotonic() - self._away_since
+
+    def set_override(self, mode: str) -> str:
+        mode = mode if mode in ("auto", "on", "off") else "auto"
+        self.log_override = mode
+        return mode
+
     def _gate(self, snap: Dict[str, Any]):
-        """(passes, reason) for the track-logging gate: a good, MOVING fix."""
-        if not snap.get("fix"):
-            return False, "no fix"
-        sats = snap.get("sats_used") or 0
-        if sats < self.min_log_sats:
-            return False, "%d sats (<%d)" % (sats, self.min_log_sats)
-        hdop = snap.get("hdop")
-        if hdop is None or hdop > self.max_log_hdop:
-            return False, "HDOP %s (>%s)" % (hdop, self.max_log_hdop)
-        speed_mph = (snap.get("speed_kmh") or 0.0) * 0.621371
-        if speed_mph < self.min_log_mph:
-            return False, "%.1f mph (<%s)" % (speed_mph, self.min_log_mph)
-        return True, "ok"
+        """(passes, reason): record the track when we're away from home Wi-Fi
+        (or forced), and the record is an actual fix."""
+        ov = self.log_override
+        if ov == "off":
+            return False, "override OFF"
+        if ov == "on":
+            net_ok, net_why = True, "override ON"
+        elif self._home_now:
+            return False, "at home (%sx)" % self.home_prefix
+        else:
+            away = self.away_seconds()
+            if away < self.away_debounce:
+                return False, "away %ds (<%ds)" % (int(away), self.away_debounce)
+            net_ok, net_why = True, "away/riding"
+        if not (snap.get("fix") and snap.get("lat") is not None and snap.get("lon") is not None):
+            return False, "no fix yet"
+        return True, net_why
 
     # -- flight recorder (always-on diagnostic log) -------------------------
     def _diag_loop(self) -> None:
@@ -454,12 +515,14 @@ class GpsReader:
             "log_file": self._log_file.name if self._log_file else None,
             "log_count": self._log_count,
             "log_interval": self.log_interval,
-            "min_log_mph": round(self.min_log_mph, 1),
-            "min_log_sats": self.min_log_sats,
-            "max_log_hdop": round(self.max_log_hdop, 1),
             "skipped_logs": self._skipped,
             "logging_now": passes,        # is it recording the track right now?
             "why_not": None if passes else reason,
+            "on_home_wifi": self._home_now,
+            "away_seconds": round(self.away_seconds(), 0),
+            "away_debounce": self.away_debounce,
+            "log_override": self.log_override,
+            "home_prefix": self.home_prefix,
             "diag_file": self._diag_file.name if self._diag_file else None,
             "diag_count": self._diag_count,
             **snap,

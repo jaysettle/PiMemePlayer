@@ -33,9 +33,11 @@ DEFAULTS: Dict[str, Any] = {
     "button_bounce_ms": 60,
     "encoder_bounce_ms": 3,
     "encoder_role": "select",    # "select" (rotate cycles samples) | "volume"
-    "gps_log_min_mph": 3.0,      # only log GPS when moving >= this (skips jitter)
-    "gps_log_min_sats": 7,       # ...and using >= this many satellites (good fix)
-    "gps_log_max_hdop": 3.0,     # ...and HDOP <= this (good geometry)
+    "gps_log_min_mph": 3.0,      # (legacy quality gate; logging is now network-driven)
+    "gps_log_min_sats": 7,
+    "gps_log_max_hdop": 3.0,
+    "gps_home_prefix": "192.168.3.",  # home Wi-Fi subnet; off it = "out riding"
+    "gps_away_debounce_s": 10,        # log after being away this many seconds
 }
 
 # Settings that only take effect after a service restart (GPIO devices).

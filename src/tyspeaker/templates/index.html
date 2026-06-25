@@ -413,6 +413,19 @@
         </div>
       </div>
 
+      <div class="sectionBox" style="margin-top:14px">
+        <div class="row" style="flex-wrap:wrap; align-items:center; gap:10px">
+          <b>Logging</b>
+          <span id="gpsLogState" class="pill">—</span>
+          <span class="mini" id="gpsLogWhy"></span>
+          <span style="margin-left:auto"></span>
+          <button class="ghost" id="ovAuto" onclick="setGpsOverride('auto')" type="button">Auto</button>
+          <button class="primary" id="ovOn" onclick="setGpsOverride('on')" type="button">Force ON</button>
+          <button class="ghost danger" id="ovOff" onclick="setGpsOverride('off')" type="button">Force OFF</button>
+        </div>
+        <div class="mini" style="margin-top:6px">Auto records whenever you've been away from home Wi-Fi for &gt;10s (including on the Pi's hotspot). Force ON/OFF override that, and snap back to Auto when you reconnect to the home network.</div>
+      </div>
+
       <details class="sectionBox" open style="margin-top:14px">
         <summary>Pick a day</summary>
         <div class="row" style="flex-wrap:wrap; align-items:center; gap:10px; margin-top:10px">
@@ -576,14 +589,9 @@
           <span id="gpsStatusPill" class="pill">GPS: --</span>
           <span id="gpsFixPill" class="pill">fix: --</span>
           <button class="ghost" onclick="loadGps()" type="button">Refresh</button>
-          <label class="mini" style="display:flex; align-items:center; gap:6px; margin-left:auto; flex-wrap:wrap">
-            Log only when ≥
-            <input type="number" id="gpsMinMph" min="0" max="50" step="0.5" value="3" style="width:56px"> mph &amp; ≥
-            <input type="number" id="gpsMinSats" min="0" max="20" step="1" value="7" style="width:48px"> sats
-            <button class="blue" onclick="saveGpsMinMph()" type="button">Set</button>
-          </label>
+          <span id="gpsLogPill" class="pill" style="margin-left:auto">logging: --</span>
         </div>
-        <div class="mini" style="margin-top:6px">Skips parked-at-home jitter and saves SD space. Indoors the fix is weak (few satellites) and drifts up to ~850&nbsp;ft with fake speeds, so we only record a strong, moving fix — enough satellites is the reliable "he's actually outside" signal.</div>
+        <div class="mini" style="margin-top:6px">Logging is now <b>network-driven</b>: it records whenever the Pi is away from the home Wi-Fi (192.168.3.x) for &gt;10s — out riding, including on the hotspot. Start/stop it manually on the <b>GPS tab</b>.</div>
         <div class="diagGrid" style="margin-top:12px">
           <div class="diagCard">
             <h3>Module <span id="gpsLamp" class="diagLamp"></span></h3>
@@ -753,8 +761,9 @@
         stopBtLogs();
       }
       if(name === "gps"){
-        loadGpsDays();
-      }
+        loadGpsDays(); loadGpsLogState();
+        if(!gpsLogTimer) gpsLogTimer = setInterval(loadGpsLogState, 3000);
+      } else if(gpsLogTimer){ clearInterval(gpsLogTimer); gpsLogTimer = null; }
       if(name === "config"){
         loadConfig();
         startInputDiagnostics();
@@ -1245,12 +1254,13 @@
       set("gpsAge", d.last_data_age==null ? "--" : d.last_data_age + "s ago");
       set("gpsSentences", d.sentences); set("gpsErrors", d.errors);
       set("gpsLogFile", d.log_file || "--"); set("gpsLogCount", d.log_count);
-      set("gpsMinMphVal", d.min_log_mph==null ? "--" : ("≥" + d.min_log_mph + " mph · ≥" + (d.min_log_sats==null?"?":d.min_log_sats) + " sats · HDOP≤" + (d.max_log_hdop==null?"?":d.max_log_hdop)));
+      set("gpsMinMphVal", d.on_home_wifi ? "home (idle)" : ("away " + (d.away_seconds||0) + "s · " + (d.log_override||"auto")));
       set("gpsSkipped", d.skipped_logs==null ? 0 : d.skipped_logs);
-      const mphIn = $("gpsMinMph");
-      if(mphIn && d.min_log_mph!=null && document.activeElement !== mphIn) mphIn.value = d.min_log_mph;
-      const satsIn = $("gpsMinSats");
-      if(satsIn && d.min_log_sats!=null && document.activeElement !== satsIn) satsIn.value = d.min_log_sats;
+      const lp = $("gpsLogPill");
+      if(lp){
+        if(d.logging_now){ lp.textContent = "logging: ● ON"; lp.className = "pill on"; }
+        else { lp.textContent = "logging: ○ off" + (d.why_not ? (" ("+d.why_not+")") : ""); lp.className = "pill"; }
+      }
       set("gpsFix", d.fix ? ((d.fix_type===3?"3D":d.fix_type===2?"2D":"")+" fix").trim() : (d.receiving ? "searching (needs sky view)" : "no data"));
       set("gpsSats", (d.sats_used||0) + " used / " + (d.sats_in_view||0) + " in view");
       set("gpsLat", d.lat==null ? "--" : d.lat.toFixed(6));
@@ -1529,7 +1539,33 @@
     };
 
     // ---- GPS tab: tracks, metrics, map ----
-    let gpsMap = null, gpsLayer = null, gpsData = null, gpsSelectedDate = null;
+    let gpsMap = null, gpsLayer = null, gpsData = null, gpsSelectedDate = null, gpsLogTimer = null;
+    async function loadGpsLogState(){
+      let d;
+      try{ d = await api("/api/gps"); }catch(e){ return; }
+      const st = $("gpsLogState"), why = $("gpsLogWhy");
+      if(st){
+        if(d.logging_now){ st.textContent = "● Recording"; st.className = "pill on"; }
+        else { st.textContent = "○ Not recording"; st.className = "pill"; }
+      }
+      if(why){
+        let w = d.on_home_wifi ? "on home Wi-Fi" : ("away " + (d.away_seconds||0) + "s");
+        if(d.why_not) w += " · " + d.why_not;
+        else if(d.log_override === "on") w += " · forced on";
+        why.textContent = w;
+      }
+      const ov = d.log_override || "auto";
+      ["ovAuto","ovOn","ovOff"].forEach(id => { const b = $(id); if(b) b.style.outline = ""; });
+      const active = $(ov === "on" ? "ovOn" : ov === "off" ? "ovOff" : "ovAuto");
+      if(active) active.style.outline = "2px solid var(--accent2)";
+    }
+    async function setGpsOverride(mode){
+      try{
+        const r = await api("/api/gps/override", {mode});
+        toast("Logging override: " + r.log_override.toUpperCase());
+        loadGpsLogState();
+      }catch(e){ toast(e.message); }
+    }
     function fmtDur(s){
       s = Math.round(s || 0);
       const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
