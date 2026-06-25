@@ -78,11 +78,23 @@ class GpsReader:
         min_log_mph: float = 3.0,
         min_log_sats: int = 7,
         max_log_hdop: float = 3.0,
+        diag_interval: int = 30,
+        diag_keep_days: int = 14,
+        get_battery=None,
     ) -> None:
         self.port = port
         self.baud = baud
         self.log_dir = Path(log_dir) if log_dir else None
         self.log_interval = max(2, int(log_interval))
+        # Flight recorder: a SEPARATE always-on diagnostic log (GPS state +
+        # battery every diag_interval, regardless of the track gate) so we can
+        # reconstruct "what happened" on a ride — when it got satellite lock,
+        # whether the battery died, etc. Rotated to the last diag_keep_days.
+        self.diag_interval = max(5, int(diag_interval))
+        self.diag_keep_days = max(1, int(diag_keep_days))
+        self.get_battery = get_battery  # callable -> power_status() dict, or None
+        self._diag_file: Optional[Path] = None
+        self._diag_count = 0
         # Log only a GOOD, MOVING fix. Indoors the fix is weak (few satellites,
         # high HDOP) and throws fake speeds up to ~12 mph, so speed alone leaks.
         # Satellite count is the clean discriminator: indoor jitter uses 3-6
@@ -127,6 +139,7 @@ class GpsReader:
         threading.Thread(target=self._read_loop, daemon=True).start()
         if self.log_dir is not None:
             threading.Thread(target=self._log_loop, daemon=True).start()
+            threading.Thread(target=self._diag_loop, daemon=True).start()
         log.info(
             "GPS reader started on %s @ %s (log every %ss -> %s)",
             self.port, self.baud, self.log_interval, self.log_dir,
@@ -248,20 +261,9 @@ class GpsReader:
         with self._lock:
             snap = dict(self._state)
             raw = list(self._raw)
-        # Quality + movement gate: only log a GOOD, MOVING fix. Requires enough
-        # satellites and low HDOP (kills indoor multipath jitter, which is weak
-        # and few-sat) AND real speed (skips parked + no-fix records).
-        speed_mph = (snap.get("speed_kmh") or 0.0) * 0.621371
-        sats = snap.get("sats_used") or 0
-        hdop = snap.get("hdop")
-        good = (
-            snap.get("fix")
-            and sats >= self.min_log_sats
-            and hdop is not None
-            and hdop <= self.max_log_hdop
-            and speed_mph >= self.min_log_mph
-        )
-        if not good:
+        # Quality + movement gate: only log a GOOD, MOVING fix.
+        passes, _reason = self._gate(snap)
+        if not passes:
             self._skipped += 1
             return
         lt = time.localtime(now)
@@ -281,6 +283,111 @@ class GpsReader:
         self._log_file = fname
         self._log_count += 1
 
+    def _gate(self, snap: Dict[str, Any]):
+        """(passes, reason) for the track-logging gate: a good, MOVING fix."""
+        if not snap.get("fix"):
+            return False, "no fix"
+        sats = snap.get("sats_used") or 0
+        if sats < self.min_log_sats:
+            return False, "%d sats (<%d)" % (sats, self.min_log_sats)
+        hdop = snap.get("hdop")
+        if hdop is None or hdop > self.max_log_hdop:
+            return False, "HDOP %s (>%s)" % (hdop, self.max_log_hdop)
+        speed_mph = (snap.get("speed_kmh") or 0.0) * 0.621371
+        if speed_mph < self.min_log_mph:
+            return False, "%.1f mph (<%s)" % (speed_mph, self.min_log_mph)
+        return True, "ok"
+
+    # -- flight recorder (always-on diagnostic log) -------------------------
+    def _diag_loop(self) -> None:
+        self._write_diag(event="boot")  # mark each app start / power-up
+        self._prune_diag()
+        while not self._stop.wait(self.diag_interval):
+            try:
+                self._write_diag()
+            except Exception as exc:
+                log.debug("GPS diag error: %s", exc)
+
+    def _write_diag(self, event: str = "") -> None:
+        if self.log_dir is None:
+            return
+        now = time.time()
+        with self._lock:
+            snap = dict(self._state)
+        passes, reason = self._gate(snap)
+        batt = None
+        if self.get_battery is not None:
+            try:
+                b = self.get_battery() or {}
+                batt = {
+                    "pct": b.get("percent"),
+                    "volt": b.get("voltage"),
+                    "plugged": b.get("external_power"),
+                    "charging": b.get("charging"),
+                    "state": b.get("state"),
+                }
+            except Exception:
+                batt = None
+        lt = time.localtime(now)
+        diag_dir = self.log_dir / "diag"
+        diag_dir.mkdir(parents=True, exist_ok=True)
+        fname = diag_dir / time.strftime("%Y-%m-%d.jsonl", lt)
+        rec = {
+            "iso": time.strftime("%Y-%m-%dT%H:%M:%S", lt),
+            "ts": round(now, 1),
+            "event": event or "tick",
+            "gps_utc": snap.get("utc"),
+            "gps_date": snap.get("date"),
+            "receiving": (now - self._last_rx) < 5.0,
+            "fix": snap.get("fix"),
+            "fix_type": snap.get("fix_type"),
+            "sats_used": snap.get("sats_used"),
+            "sats_in_view": snap.get("sats_in_view"),
+            "hdop": snap.get("hdop"),
+            "lat": snap.get("lat"),
+            "lon": snap.get("lon"),
+            "speed_kmh": snap.get("speed_kmh"),
+            "would_log": passes,
+            "why": reason,
+            "sentences": self._sentences,
+            "battery": batt,
+        }
+        with open(fname, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+        self._diag_file = fname
+        self._diag_count += 1
+
+    def _prune_diag(self) -> None:
+        diag_dir = self.log_dir / "diag" if self.log_dir else None
+        if not diag_dir or not diag_dir.exists():
+            return
+        cutoff = time.time() - self.diag_keep_days * 86400
+        for p in diag_dir.glob("*.jsonl"):
+            try:
+                if p.stat().st_mtime < cutoff:
+                    p.unlink()
+            except OSError:
+                pass
+
+    def recent_diag(self, n: int = 200) -> List[Dict[str, Any]]:
+        """The last n flight-recorder entries (newest last), across recent days."""
+        diag_dir = self.log_dir / "diag" if self.log_dir else None
+        if not diag_dir or not diag_dir.exists():
+            return []
+        out: List[Dict[str, Any]] = []
+        for p in sorted(diag_dir.glob("*.jsonl"))[-3:]:
+            try:
+                for line in p.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line:
+                        try:
+                            out.append(json.loads(line))
+                        except ValueError:
+                            pass
+            except OSError:
+                pass
+        return out[-n:]
+
     # -- status -------------------------------------------------------------
     def status(self) -> Dict[str, Any]:
         now = time.time()
@@ -290,6 +397,7 @@ class GpsReader:
         receiving = (
             self.available and self._sentences > 0 and (now - self._last_rx) < 5.0
         )
+        passes, reason = self._gate(snap)
         return {
             "available": self.available,
             "port": self.port,
@@ -308,5 +416,9 @@ class GpsReader:
             "min_log_sats": self.min_log_sats,
             "max_log_hdop": round(self.max_log_hdop, 1),
             "skipped_logs": self._skipped,
+            "logging_now": passes,        # is it recording the track right now?
+            "why_not": None if passes else reason,
+            "diag_file": self._diag_file.name if self._diag_file else None,
+            "diag_count": self._diag_count,
             **snap,
         }

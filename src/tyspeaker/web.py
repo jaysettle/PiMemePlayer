@@ -319,6 +319,7 @@ def create_app(
             min_log_mph=float(cfg.get("gps_log_min_mph", 3.0)),
             min_log_sats=int(cfg.get("gps_log_min_sats", 7)),
             max_log_hdop=float(cfg.get("gps_log_max_hdop", 3.0)),
+            get_battery=power_status,
         ).start()
         if config.GPS_PORT
         else None
@@ -478,6 +479,15 @@ def create_app(
                 gps.max_log_hdop = hd
             out["max_log_hdop"] = hd
         return jsonify(ok=True, **out)
+
+    @app.get("/api/gps/diag")
+    def api_gps_diag():
+        try:
+            n = max(1, min(2000, int(request.args.get("n", "300"))))
+        except (TypeError, ValueError):
+            n = 300
+        entries = gps.recent_diag(n) if gps is not None else []
+        return jsonify(entries=entries, count=len(entries))
 
     @app.get("/api/gps/days")
     def api_gps_days():

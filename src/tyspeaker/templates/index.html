@@ -617,6 +617,13 @@
             <div style="margin-top:10px"><a id="gpsMapLink" href="#" target="_blank" rel="noopener" style="display:none">Open in map ↗</a></div>
           </div>
         </div>
+        <div style="margin-top:12px">
+          <button class="ghost" onclick="toggleGpsDiag()" type="button" id="gpsDiagBtn">Flight recorder ▾</button>
+          <div id="gpsDiagWrap" style="display:none; margin-top:8px">
+            <div class="mini">Always-on "black box" — GPS state + battery every 30s, even when nothing is recorded as a ride. Survives a power loss (persistent journal). Use it to see when satellite lock happened or when the battery died. Newest at bottom.</div>
+            <pre id="gpsDiagBox" style="max-height:300px; overflow:auto; background:#0d121c; border:1px solid #2a3342; border-radius:10px; padding:10px; font-size:11px; line-height:1.5; white-space:pre-wrap; margin-top:8px">loading…</pre>
+          </div>
+        </div>
       </details>
 
       <details class="sectionBox">
@@ -1270,6 +1277,41 @@
         toast("Logging only when ≥ " + r.min_log_mph + " mph & ≥ " + r.min_log_sats + " sats");
         loadGps();
       }catch(e){ toast(e.message); }
+    }
+    let gpsDiagTimer = null;
+    function toggleGpsDiag(){
+      const wrap = $("gpsDiagWrap"), btn = $("gpsDiagBtn");
+      if(wrap.style.display !== "none"){
+        wrap.style.display = "none"; btn.textContent = "Flight recorder ▾";
+        if(gpsDiagTimer){ clearInterval(gpsDiagTimer); gpsDiagTimer = null; }
+      } else {
+        wrap.style.display = ""; btn.textContent = "Flight recorder ▴";
+        loadGpsDiag();
+        if(!gpsDiagTimer) gpsDiagTimer = setInterval(loadGpsDiag, 5000);
+      }
+    }
+    async function loadGpsDiag(){
+      let d;
+      try{ d = await api("/api/gps/diag?n=150"); }catch(e){ $("gpsDiagBox").textContent = "error: " + e.message; return; }
+      const fmt = e => {
+        const t = (e.iso || "").slice(11);
+        const ev = (e.event && e.event !== "tick") ? "[" + e.event.toUpperCase() + "] " : "";
+        const fix = e.fix ? ("FIX" + (e.fix_type===3?"3D":e.fix_type===2?"2D":"")) : "no-fix";
+        const sats = " " + (e.sats_used==null?0:e.sats_used) + "/" + (e.sats_in_view==null?0:e.sats_in_view) + "sat";
+        const hd = e.hdop!=null ? " h" + e.hdop : "";
+        const sp = e.speed_kmh!=null ? " " + (e.speed_kmh*0.621371).toFixed(1) + "mph" : "";
+        const rec = e.would_log ? "  ✓REC" : ("  ·" + (e.why || ""));
+        let b = "";
+        if(e.battery){
+          if(e.battery.pct!=null) b = "  🔋" + e.battery.pct + "%" + (e.battery.plugged?"⚡":"");
+          else if(e.battery.state === "ups_installed_no_meter") b = "  🔋?";
+        }
+        return t + " " + ev + fix + sats + hd + sp + rec + b;
+      };
+      const box = $("gpsDiagBox");
+      const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 20;
+      box.textContent = (d.entries || []).map(fmt).join("\n") || "(no flight-recorder entries yet — give it ~30s)";
+      if(atBottom) box.scrollTop = box.scrollHeight;
     }
     function setDiagPill(id, on, label){
       const el = $(id);
