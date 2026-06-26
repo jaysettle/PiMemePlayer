@@ -95,15 +95,12 @@ class GpsStats:
             log.debug("day cache write failed: %s", exc)
         return summary
 
-    def _build_day(self, date: str) -> Dict[str, Any]:
-        pts: List[tuple] = []
-        for r in self._read_raw(date):
-            lat, lon, ts = r.get("lat"), r.get("lon"), r.get("ts")
-            if lat is None or lon is None or ts is None or not r.get("fix"):
-                continue
-            pts.append((float(ts), float(lat), float(lon), r.get("speed_kmh")))
-        pts.sort(key=lambda x: x[0])
+    # A new trip starts when there's a gap this long between fixes (came home /
+    # took a break between rides) — so two rides in a day don't get joined.
+    _TRIP_GAP_S = 120
 
+    def _segment_stats(self, pts: List[tuple]) -> Dict[str, Any]:
+        """pts = sorted [(ts, lat, lon, spd_kmh)] -> {stats, track, bounds}."""
         track: List[list] = []
         dist_km = 0.0
         moving_s = 0.0
@@ -124,29 +121,78 @@ class GpsStats:
                         if implied >= _MOVING_KMH:
                             moving_s += dt
             prev = (ts, lat, lon, spd)
-
-        total_s = (pts[-1][0] - pts[0][0]) if len(pts) >= 2 else 0
         dist_mi = dist_km * _MI_PER_KM
-        avg_mph = round(dist_mi / (moving_s / 3600.0), 1) if moving_s > 5 else 0.0
         bounds = None
         if track:
             lats = [p[0] for p in track]
             lons = [p[1] for p in track]
             bounds = [[min(lats), min(lons)], [max(lats), max(lons)]]
         return {
-            "date": date,
             "stats": {
                 "distance_mi": round(dist_mi, 2),
-                "distance_km": round(dist_km, 2),
                 "moving_s": int(moving_s),
-                "total_s": int(total_s),
-                "avg_mph": avg_mph,
+                "total_s": int(pts[-1][0] - pts[0][0]) if len(pts) >= 2 else 0,
+                "avg_mph": round(dist_mi / (moving_s / 3600.0), 1) if moving_s > 5 else 0.0,
                 "max_mph": round(max_kmh * _MI_PER_KM, 1),
                 "points": len(track),
             },
             "track": track,
             "bounds": bounds,
         }
+
+    def _build_day(self, date: str) -> Dict[str, Any]:
+        # Only "away from home" fixes form a ride (home points are jitter/idle).
+        # Old logs have no 'home' key -> kept (treated as away).
+        away: List[tuple] = []
+        for r in self._read_raw(date):
+            lat, lon, ts = r.get("lat"), r.get("lon"), r.get("ts")
+            if lat is None or lon is None or ts is None or not r.get("fix"):
+                continue
+            if r.get("home"):
+                continue
+            away.append((float(ts), float(lat), float(lon), r.get("speed_kmh")))
+        away.sort(key=lambda x: x[0])
+
+        # split into trips wherever there's a long gap (home/break between rides)
+        segs: List[List[tuple]] = []
+        cur: List[tuple] = []
+        for p in away:
+            if cur and (p[0] - cur[-1][0]) > self._TRIP_GAP_S:
+                segs.append(cur)
+                cur = []
+            cur.append(p)
+        if cur:
+            segs.append(cur)
+
+        trips = []
+        for seg in segs:
+            s = self._segment_stats(seg)
+            st = s["stats"]
+            st["start"] = time.strftime("%H:%M", time.localtime(seg[0][0]))
+            st["end"] = time.strftime("%H:%M", time.localtime(seg[-1][0]))
+            trips.append(
+                {"index": len(trips) + 1, "stats": st,
+                 "track": s["track"], "bounds": s["bounds"]}
+            )
+
+        bounds = None
+        if trips:
+            lats = [p[0] for t in trips for p in t["track"]]
+            lons = [p[1] for t in trips for p in t["track"]]
+            if lats:
+                bounds = [[min(lats), min(lons)], [max(lats), max(lons)]]
+        day = {
+            "distance_mi": round(sum(t["stats"]["distance_mi"] for t in trips), 2),
+            "moving_s": sum(t["stats"]["moving_s"] for t in trips),
+            "max_mph": max([t["stats"]["max_mph"] for t in trips], default=0.0),
+            "points": sum(t["stats"]["points"] for t in trips),
+            "trips": len(trips),
+        }
+        day["avg_mph"] = (
+            round(day["distance_mi"] / (day["moving_s"] / 3600.0), 1)
+            if day["moving_s"] > 5 else 0.0
+        )
+        return {"date": date, "stats": day, "trips": trips, "bounds": bounds}
 
     # -- aggregates ---------------------------------------------------------
     def list_days(self) -> Dict[str, Any]:

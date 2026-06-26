@@ -453,6 +453,7 @@
           <b id="gpsDayTitle">No day selected</b>
           <span id="gpsDayMeta" class="mini"></span>
         </div>
+        <div id="gpsTrips" class="row" style="flex-wrap:wrap; gap:8px; margin-top:10px"></div>
         <div id="gpsMap" style="height:420px; margin-top:10px; border-radius:12px; overflow:hidden; background:#0d121c"></div>
         <div id="gpsMapMsg" class="mini" style="margin-top:8px"></div>
       </div>
@@ -591,6 +592,12 @@
           </div>
         </div>
         <div id="diagErrors" class="mini" style="margin-top:12px"></div>
+      </details>
+
+      <details class="sectionBox" ontoggle="if(this.open) loadBeeps()">
+        <summary>🎵 Beep playground</summary>
+        <div class="mini">Tap a tune to hear it on the piezo. The famous melodies use real RTTTL note data (the Nokia ringtone format); R2-D2 chirps and alerts are sound effects. The buzzer is loudest near 2&nbsp;kHz, so volume varies a little across a melody.</div>
+        <div id="beepPlayground" style="margin-top:12px">open to load…</div>
       </details>
 
       <details class="sectionBox" open>
@@ -1380,6 +1387,29 @@
         toast("System tone set to " + r.freq + " Hz" + (r.hardware ? " (hardware PWM)" : " (software PWM)"));
       }catch(e){ toast(e.message); }
     }
+    let _beepsLoaded = false;
+    async function loadBeeps(){
+      const wrap = $("beepPlayground"); if(!wrap || _beepsLoaded) return;
+      let d;
+      try{ d = await api("/api/beeps"); }catch(e){ wrap.textContent = "Could not load beeps."; return; }
+      const secs = d.sections || {};
+      let html = "";
+      Object.keys(secs).forEach(sec => {
+        html += '<div style="margin-top:14px"><b style="color:var(--gold)">' + sec + '</b>'
+              + '<div class="row" style="flex-wrap:wrap; gap:8px; margin-top:8px">';
+        secs[sec].forEach(name => {
+          const safe = name.replace(/'/g, "\\'");
+          html += '<button class="ghost" type="button" onclick="playBeep(\'' + safe + '\')">' + name + '</button>';
+        });
+        html += '</div></div>';
+      });
+      wrap.innerHTML = html || "No beeps.";
+      _beepsLoaded = true;
+    }
+    async function playBeep(name){
+      try{ const r = await api("/api/diagnostics/beep", {name}); if(!r.wired) toast("No buzzer wired on the pin"); }
+      catch(e){ toast(e.message || "beep failed"); }
+    }
     let _logTimer = null;
     async function loadLogs(){
       try{
@@ -1550,7 +1580,7 @@
     };
 
     // ---- GPS tab: tracks, metrics, map ----
-    let gpsMap = null, gpsLayer = null, gpsData = null, gpsSelectedDate = null, gpsLogTimer = null;
+    let gpsMap = null, gpsLayer = null, gpsData = null, gpsDayData = null, gpsSelectedDate = null, gpsLogTimer = null;
     async function loadGpsLogState(){
       let d;
       try{ d = await api("/api/gps"); }catch(e){ return; }
@@ -1663,27 +1693,58 @@
       renderGpsDays();
       let d;
       try{ d = await api("/api/gps/day/" + date); }catch(e){ return; }
-      const s = d.stats || {};
-      $("m_miles").textContent = (s.distance_mi || 0).toFixed(1);
-      $("m_time").textContent = fmtDur(s.moving_s);
-      $("m_avg").textContent = (s.avg_mph || 0).toFixed(1) + " mph";
-      $("m_top").textContent = (s.max_mph || 0).toFixed(1) + " mph";
+      gpsDayData = d;
       $("gpsDayTitle").textContent = dayLabel(date, {weekday:"long", month:"long", day:"numeric", year:"numeric"});
-      $("gpsDayMeta").textContent = (s.points || 0) + " points · " + (s.distance_mi || 0).toFixed(2) + " mi · top " + (s.max_mph || 0).toFixed(1) + " mph";
+      const trips = d.trips || [];
+      const sel = $("gpsTrips");
+      if(sel){
+        if(trips.length > 1){
+          let html = '<button class="ghost" id="trip_all" onclick="showTrip(\'all\')">All rides</button>';
+          trips.forEach(t => {
+            const ts = t.stats || {};
+            html += '<button class="ghost" id="trip_' + t.index + '" onclick="showTrip(' + t.index + ')">'
+                  + 'Ride ' + t.index + ' · ' + (ts.start||'') + '–' + (ts.end||'') + ' · ' + (ts.distance_mi||0).toFixed(2) + ' mi</button>';
+          });
+          sel.innerHTML = html;
+        } else { sel.innerHTML = ""; }
+      }
+      showTrip(trips.length > 1 ? "all" : (trips.length ? 1 : "all"));
+    }
+    function showTrip(which){
+      const d = gpsDayData; if(!d) return;
+      const trips = d.trips || [];
+      ["all"].concat(trips.map(t => t.index)).forEach(k => { const b = $("trip_"+k); if(b) b.style.outline = ""; });
+      const ab = $("trip_"+which); if(ab) ab.style.outline = "2px solid var(--accent2)";
+      let drawTrips, stats, bounds;
+      if(which === "all"){ drawTrips = trips; stats = d.stats || {}; bounds = d.bounds; }
+      else { const t = trips.find(x => x.index === which) || trips[0]; drawTrips = t ? [t] : []; stats = (t && t.stats) || {}; bounds = t && t.bounds; }
+      $("m_miles").textContent = (stats.distance_mi || 0).toFixed(1);
+      $("m_time").textContent = fmtDur(stats.moving_s);
+      $("m_avg").textContent = (stats.avg_mph || 0).toFixed(1) + " mph";
+      $("m_top").textContent = (stats.max_mph || 0).toFixed(1) + " mph";
+      const label = which === "all" ? (trips.length + " ride" + (trips.length===1?"":"s")) : ("Ride " + which);
+      $("gpsDayMeta").textContent = label + " · " + (stats.points||0) + " pts · " + (stats.distance_mi||0).toFixed(2) + " mi · top " + (stats.max_mph||0).toFixed(1) + " mph";
       const msg = $("gpsMapMsg");
       if(typeof L === "undefined"){ msg.textContent = "Map needs internet to load (Leaflet). The stats above still work offline."; return; }
       const map = ensureGpsMap();
       setTimeout(() => map.invalidateSize(), 120);
       if(gpsLayer){ gpsLayer.remove(); gpsLayer = null; }
-      const track = (d.track || []).filter(p => p[0] != null && p[1] != null);
-      if(!track.length){ msg.textContent = "No GPS fix recorded this day (indoors, or no sky view)."; return; }
-      msg.textContent = "";
-      const latlngs = track.map(p => [p[0], p[1]]);
       gpsLayer = L.layerGroup().addTo(map);
-      L.polyline(latlngs, {color:"#25d9ff", weight:5, opacity:0.9}).addTo(gpsLayer);
-      L.circleMarker(latlngs[0], {radius:7, color:"#fff", weight:2, fillColor:"#3cff6b", fillOpacity:1}).bindTooltip("Start").addTo(gpsLayer);
-      L.circleMarker(latlngs[latlngs.length-1], {radius:7, color:"#fff", weight:2, fillColor:"#ff4d74", fillOpacity:1}).bindTooltip("End").addTo(gpsLayer);
-      if(d.bounds){ map.fitBounds(d.bounds, {padding:[30,30], maxZoom:17}); }
+      const colors = ["#25d9ff","#ffb020","#b07cff","#3cff6b","#ff7ad9","#ff4d74"];
+      let any = false;
+      drawTrips.forEach(t => {
+        const track = (t.track || []).filter(p => p[0] != null && p[1] != null);
+        if(!track.length) return;
+        any = true;
+        const ll = track.map(p => [p[0], p[1]]);
+        const c = colors[(t.index - 1) % colors.length];
+        L.polyline(ll, {color:c, weight:5, opacity:0.9}).addTo(gpsLayer);
+        L.circleMarker(ll[0], {radius:6, color:"#fff", weight:2, fillColor:"#3cff6b", fillOpacity:1}).bindTooltip("Ride "+t.index+" start").addTo(gpsLayer);
+        L.circleMarker(ll[ll.length-1], {radius:6, color:"#fff", weight:2, fillColor:"#ff4d74", fillOpacity:1}).bindTooltip("Ride "+t.index+" end").addTo(gpsLayer);
+      });
+      if(!any){ msg.textContent = "No GPS fix recorded (indoors / no sky view)."; return; }
+      msg.textContent = "";
+      if(bounds){ map.fitBounds(bounds, {padding:[30,30], maxZoom:17}); }
     }
 
     applyTheme("neon");

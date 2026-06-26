@@ -354,6 +354,7 @@ class GpsReader:
             "iso": time.strftime("%Y-%m-%dT%H:%M:%S", lt),
             "ts": round(now, 1),
             **snap,
+            "home": self._home_now,   # for splitting a day into separate trips
             "receiving": (now - self._last_rx) < 5.0,
             "raw_rmc": next((r for r in reversed(raw) if "RMC" in r), None),
             "raw_gga": next((r for r in reversed(raw) if "GGA" in r), None),

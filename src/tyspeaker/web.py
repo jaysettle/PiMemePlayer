@@ -14,6 +14,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from . import config
 from .bluetooth import BluetoothAutoConnector, BluetoothManager, normalize_mac
 from .engine import PlaybackEngine
+from . import beeps
 from . import hotspot
 from .gps import GpsReader
 from .gps_stats import GpsStats
@@ -584,6 +585,10 @@ def create_app(
             log.info("UI %s%s", message, f" | {detail}" if detail else "")
         return jsonify(ok=True)
 
+    @app.get("/api/beeps")
+    def api_beeps():
+        return jsonify(sections=beeps.catalog())
+
     @app.post("/api/diagnostics/beep")
     def api_diag_beep():
         piezo = getattr(inputs, "piezo", None) if inputs is not None else None
@@ -594,6 +599,13 @@ def create_app(
         if body.get("droid"):
             piezo.droid()  # C-3PO/R2-D2 chatter
             return jsonify(ok=True, wired=wired, droid=True)
+        name = body.get("name")
+        if name:
+            tune = beeps.find(str(name))
+            if tune is None:
+                return jsonify(ok=False, error="unknown beep '%s'" % name), 404
+            piezo.play_tones(tune)
+            return jsonify(ok=True, wired=wired, name=name)
         freq = body.get("freq")
         if freq:
             try:
