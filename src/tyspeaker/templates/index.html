@@ -600,6 +600,8 @@
         <div class="row" style="margin-top:12px; align-items:center; gap:10px">
           <span class="mini">Section</span>
           <select id="beepSection" onchange="renderBeepSection(this.value)" style="min-width:170px"></select>
+          <span class="mini" id="harmonyLabel" style="display:none">· Harmony</span>
+          <select id="harmonyMode" style="display:none; min-width:110px"></select>
         </div>
         <div id="beepButtons" class="row" style="flex-wrap:wrap; gap:8px; margin-top:12px">open to load…</div>
       </details>
@@ -1391,42 +1393,49 @@
         toast("System tone set to " + r.freq + " Hz" + (r.hardware ? " (hardware PWM)" : " (software PWM)"));
       }catch(e){ toast(e.message); }
     }
-    let _beepsData = null;
+    let _beepsData = null, _harmonyModes = [];
     async function loadBeeps(){
       if(_beepsData) return;
       let d;
       try{ d = await api("/api/beeps"); }catch(e){ $("beepButtons").textContent = "Could not load beeps."; return; }
       _beepsData = d.sections || {};
+      _harmonyModes = d.harmony_modes || [];
       const sel = $("beepSection");
       sel.innerHTML = "";
       Object.keys(_beepsData).forEach(s => {
         const o = document.createElement("option"); o.value = s; o.textContent = s; sel.appendChild(o);
       });
+      const hm = $("harmonyMode");
+      if(hm){ hm.innerHTML = ""; _harmonyModes.forEach(m => { const o = document.createElement("option"); o.value = m; o.textContent = m; hm.appendChild(o); }); }
       const first = Object.keys(_beepsData)[0];
       if(first){ sel.value = first; renderBeepSection(first); }
     }
     function renderBeepSection(name){
       const wrap = $("beepButtons"); if(!wrap || !_beepsData) return;
       const sec = _beepsData[name]; if(!sec) return;
+      const hm = $("harmonyMode"), hl = $("harmonyLabel");
+      if(hm) hm.style.display = sec.duet ? "" : "none";
+      if(hl) hl.style.display = sec.duet ? "" : "none";
+      if(sec.duet && hm && sec.harmony) hm.value = sec.harmony;
       wrap.innerHTML = "";
       if(sec.duet){
         const note = document.createElement("div");
         note.className = "mini"; note.style.width = "100%";
-        note.innerHTML = sec.harmony === "thirds"
-          ? "🎶 Two-piezo harmony — melody on piezo&nbsp;1, a diatonic third on piezo&nbsp;2."
-          : "🎶 Two-piezo duet — effect on piezo&nbsp;1, a parallel fifth on piezo&nbsp;2.";
+        note.innerHTML = "🎶 Two-piezo duet — melody on piezo&nbsp;1, the chosen harmony interval on piezo&nbsp;2. Pick an interval above ↑.";
         wrap.appendChild(note);
       }
       (sec.tunes || []).forEach(n => {
         const b = document.createElement("button");
         b.className = sec.duet ? "primary" : "ghost"; b.type = "button"; b.textContent = n;
-        b.onclick = () => playBeep(n, sec.duet, sec.harmony);
+        b.onclick = () => playBeep(n, sec.duet);
         wrap.appendChild(b);
       });
     }
-    async function playBeep(name, duet, harmony){
+    async function playBeep(name, duet){
       try{
-        const r = await api("/api/diagnostics/beep", duet ? {name, duet:true, harmony:harmony||"thirds"} : {name});
+        const body = {name};
+        if(duet){ body.duet = true; body.harmony = ($("harmonyMode")||{}).value || "3rd above"; }
+        const r = await api("/api/diagnostics/beep", body);
         if(!r.wired) toast("No buzzer wired on the pin");
         else if(duet && r.piezo2 === false) toast("Single voice only — 2nd piezo (GPIO18) not detected");
       }catch(e){ toast(e.message || "beep failed"); }

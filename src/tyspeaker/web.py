@@ -591,7 +591,7 @@ def create_app(
 
     @app.get("/api/beeps")
     def api_beeps():
-        return jsonify(sections=beeps.catalog())
+        return jsonify(sections=beeps.catalog(), harmony_modes=beeps.harmony_modes())
 
     @app.post("/api/diagnostics/beep")
     def api_diag_beep():

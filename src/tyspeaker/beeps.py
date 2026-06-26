@@ -328,10 +328,19 @@ def _scale_notes(root: int, scale, lo: int = 33, hi: int = 96) -> List[int]:
     return sorted(set(out))
 
 
-def harmonize(tones: Tune, steps: int = 2, floor_hz: int = 330) -> DuetTune:
-    """Melody -> [(melody_hz, harmony_hz, ms)]: a DIATONIC third (steps=2) below
-    each note, snapped to the auto-detected key. The harmony is octave-floored so
-    low notes stay audible on the piezo (a third floored up = a consonant sixth)."""
+def _clamp_hz(hf: float, floor_hz: int, ceil_hz: int) -> int:
+    while hf < floor_hz:
+        hf *= 2
+    while hf > ceil_hz:
+        hf /= 2
+    return int(hf)
+
+
+def harmonize_diatonic(tones: Tune, steps: int = -2,
+                       floor_hz: int = 300, ceil_hz: int = 4200) -> DuetTune:
+    """2nd voice a DIATONIC interval away, in SCALE-DEGREE steps (negative = below,
+    positive = above; 2=third, 5=sixth, 9=tenth), snapped to the auto-detected key.
+    Octave-clamped to the piezo's audible range."""
     root, scale, _mode = detect_key(tones)
     sn = _scale_notes(root, scale)
     pairs: DuetTune = []
@@ -341,47 +350,61 @@ def harmonize(tones: Tune, steps: int = 2, floor_hz: int = 330) -> DuetTune:
             continue
         m = _f2m(f)
         idx = min(range(len(sn)), key=lambda i: abs(sn[i] - m))
-        hf = _m2f(sn[max(0, idx - steps)])
-        while hf < floor_hz:
-            hf *= 2
-        pairs.append((int(f), int(hf), ms))
+        hf = _m2f(sn[max(0, min(len(sn) - 1, idx + steps))])
+        pairs.append((int(f), _clamp_hz(hf, floor_hz, ceil_hz), ms))
     return pairs
 
 
-def harmonize_fixed(tones: Tune, semitones: int = -7, floor_hz: int = 300) -> DuetTune:
-    """2nd voice a FIXED interval away (default a perfect fifth below) — key-agnostic,
-    for sound EFFECTS that aren't in a key. Octave-floored to stay audible."""
+def harmonize_fixed(tones: Tune, semitones: int = -7,
+                    floor_hz: int = 300, ceil_hz: int = 4200) -> DuetTune:
+    """2nd voice a FIXED interval away (key-agnostic, for EFFECTS). +above / -below."""
     ratio = 2 ** (semitones / 12.0)
     out: DuetTune = []
     for f, ms in tones:
         if f <= 0:
             out.append((0, 0, ms))
             continue
-        hf = f * ratio
-        while hf < floor_hz:
-            hf *= 2
-        out.append((int(f), int(hf), ms))
+        out.append((int(f), _clamp_hz(f * ratio, floor_hz, ceil_hz), ms))
     return out
 
 
-def harmonize_named(name: str, mode: str = "thirds") -> "Optional[DuetTune]":
+# Named harmony intervals -> (kind, param). 'dia' = diatonic scale-degree steps,
+# 'fix' = fixed semitones. Negative = below the melody, positive = above.
+HARMONY_MODES = {
+    "3rd below":  ("dia", -2),
+    "3rd above":  ("dia", 2),
+    "6th below":  ("dia", -5),
+    "6th above":  ("dia", 5),
+    "10th above": ("dia", 9),
+    "4th above":  ("fix", 5),
+    "5th below":  ("fix", -7),
+    "5th above":  ("fix", 7),
+    "8ve below":  ("fix", -12),
+    "8ve above":  ("fix", 12),
+}
+_MODE_ALIASES = {"thirds": "3rd below", "fifths": "5th below", "octave": "8ve below"}
+
+
+def harmony_modes() -> List[str]:
+    return list(HARMONY_MODES.keys())
+
+
+def harmonize_named(name: str, mode: str = "3rd above") -> "Optional[DuetTune]":
     base = find(name)
     if base is None:
         return None
-    if mode == "fifths":
-        return harmonize_fixed(base, -7)
-    if mode == "octave":
-        return harmonize_fixed(base, -12)
-    return harmonize(base)   # diatonic thirds (melodies)
+    mode = _MODE_ALIASES.get(mode, mode)
+    kind, param = HARMONY_MODES.get(mode, ("dia", 2))
+    return harmonize_diatonic(base, param) if kind == "dia" else harmonize_fixed(base, param)
 
 
-# Harmony sections = existing tunes auto-harmonized for the 2nd piezo.
-# Value = (mode, [names]). Melodies -> diatonic thirds; effects -> parallel fifths.
+# Harmony sections (mode = the default interval; pickable in the UI). Melodies
+# default to a bright 3rd ABOVE; effects to a 5th above (piezos are bright up high).
 HARMONY_SECTIONS = {
-    "Movies & TV ♫": ("thirds", list(SECTIONS["Movies & TV"].keys())),
-    "Game SFX ♫":    ("fifths", list(SECTIONS["Game SFX"].keys())),
-    "Arcade FX ♫":   ("fifths", list(SECTIONS["Arcade FX"].keys())),
-    "Sci-Fi FX ♫":   ("fifths", list(SECTIONS["Sci-Fi FX"].keys())),
+    "Movies & TV ♫": ("3rd above", list(SECTIONS["Movies & TV"].keys())),
+    "Game SFX ♫":    ("5th above", list(SECTIONS["Game SFX"].keys())),
+    "Arcade FX ♫":   ("5th above", list(SECTIONS["Arcade FX"].keys())),
+    "Sci-Fi FX ♫":   ("5th above", list(SECTIONS["Sci-Fi FX"].keys())),
 }
 
 
