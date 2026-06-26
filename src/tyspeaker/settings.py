@@ -28,6 +28,7 @@ DEFAULTS: Dict[str, Any] = {
     "piezo_pin": -1,             # piezo buzzer for feedback (PWM ch1 / GPIO19)
     "piezo2_pin": 18,            # 2nd piezo for harmony (PWM ch0 / GPIO18); -1 = none
     "piezo_freq": 2000,          # system tone (Hz) for all the cue beeps
+    "piezo_volume": 100,         # 0..100 piezo loudness (scales PWM duty); live
     # input behaviour
     "double_click_ms": 350,
     "long_press_ms": 700,

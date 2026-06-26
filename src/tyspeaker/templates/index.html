@@ -598,6 +598,13 @@
         <summary>🎵 Beep playground</summary>
         <div class="mini">Tap a tune to hear it on the piezo. The famous melodies use real RTTTL note data (the Nokia ringtone format); R2-D2 chirps and alerts are sound effects. The buzzer is loudest near 2&nbsp;kHz, so volume varies a little across a melody.</div>
         <div class="row" style="margin-top:12px; align-items:center; gap:10px">
+          <span class="mini">🔊 Piezo volume</span>
+          <input type="range" id="piezoVol" min="0" max="100" step="5" value="100" style="width:170px"
+                 oninput="document.getElementById('piezoVolLbl').textContent=this.value" onchange="setPiezoVolume(this.value)">
+          <span class="pill" id="piezoVolLbl">100</span>
+          <span class="mini">(both piezos — beeps, cues &amp; harmonies)</span>
+        </div>
+        <div class="row" style="margin-top:12px; align-items:center; gap:10px">
           <span class="mini">Section</span>
           <select id="beepSection" onchange="renderBeepSection(this.value)" style="min-width:170px"></select>
           <span class="mini" id="harmonyLabel" style="display:none">· Harmony</span>
@@ -1400,6 +1407,8 @@
       try{ d = await api("/api/beeps"); }catch(e){ $("beepButtons").textContent = "Could not load beeps."; return; }
       _beepsData = d.sections || {};
       _harmonyModes = d.harmony_modes || [];
+      const pv = $("piezoVol");
+      if(pv && d.piezo_volume != null){ pv.value = d.piezo_volume; $("piezoVolLbl").textContent = d.piezo_volume; }
       const sel = $("beepSection");
       sel.innerHTML = "";
       Object.keys(_beepsData).forEach(s => {
@@ -1430,6 +1439,10 @@
         b.onclick = () => playBeep(n, sec.duet);
         wrap.appendChild(b);
       });
+    }
+    async function setPiezoVolume(v){
+      try{ await api("/api/diagnostics/piezo_volume", {volume: parseInt(v, 10)}); }
+      catch(e){ toast(e.message || "volume failed"); }
     }
     async function playBeep(name, duet){
       try{

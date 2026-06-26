@@ -45,6 +45,7 @@ class _Piezo:
         self._lock = threading.Lock()
         self._cur_stop: Optional[threading.Event] = None
         self.sys_freq = int(sys_freq) if sys_freq else self.FREQ_HZ
+        self.volume = 1.0   # master gain 0..1; scales the duty cycle (piezo loudness)
         if pin is None or pin < 0:
             return
         ch = self._HW_CHANNEL.get(pin)
@@ -76,11 +77,18 @@ class _Piezo:
         self.sys_freq = max(50, min(8000, int(freq)))
         return self.sys_freq
 
+    def set_volume(self, pct) -> int:
+        """0..100 master volume; scales every beep's duty cycle (piezo loudness)."""
+        v = max(0, min(100, int(pct)))
+        self.volume = v / 100.0
+        return v
+
     def _set(self, freq, duty) -> None:
-        """Drive the pin: freq Hz at duty 0..1; freq<=0 or duty 0 = silent. Works
-        on both the hardware-PWM and gpiozero backends."""
+        """Drive the pin: freq Hz at duty 0..1 (scaled by volume); freq<=0 or duty
+        0 = silent. Works on both the hardware-PWM and gpiozero backends."""
         if self._pwm is None:
             return
+        duty = duty * self.volume
         on = bool(freq and freq > 0 and duty and duty > 0)
         try:
             if self._hw:
@@ -456,6 +464,9 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
     # Second piezo (GPIO18 = PWM channel 0) for two-voice harmony, if wired.
     piezo2 = _Piezo(settings.get("piezo2_pin", -1), settings.get("piezo_freq", 2000))
     handles.piezo2 = piezo2
+    _pvol = settings.get("piezo_volume", 100)
+    piezo.set_volume(_pvol)
+    piezo2.set_volume(_pvol)
 
     # -- rotary encoder -----------------------------------------------------
     clk, dt = settings.get("encoder_clk", -1), settings.get("encoder_dt", -1)

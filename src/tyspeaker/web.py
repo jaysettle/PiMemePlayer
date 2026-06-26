@@ -591,7 +591,8 @@ def create_app(
 
     @app.get("/api/beeps")
     def api_beeps():
-        return jsonify(sections=beeps.catalog(), harmony_modes=beeps.harmony_modes())
+        return jsonify(sections=beeps.catalog(), harmony_modes=beeps.harmony_modes(),
+                       piezo_volume=cfg.get("piezo_volume", 100))
 
     @app.post("/api/diagnostics/beep")
     def api_diag_beep():
@@ -628,6 +629,22 @@ def create_app(
         # default: two short beeps at the resonant pitch = recognizable test cue
         piezo.play_pattern([(120, 90), (120, 0)])
         return jsonify(ok=True, wired=wired)
+
+    @app.post("/api/diagnostics/piezo_volume")
+    def api_piezo_volume():
+        try:
+            vol = int(_body().get("volume"))
+        except (TypeError, ValueError):
+            return jsonify(ok=False, error="volume must be 0..100"), 400
+        applied = max(0, min(100, vol))
+        for p in (getattr(inputs, "piezo", None), getattr(inputs, "piezo2", None)):
+            if p is not None:
+                applied = p.set_volume(vol)
+        cfg.update({"piezo_volume": applied})
+        p1 = getattr(inputs, "piezo", None)
+        if p1 is not None and applied > 0:
+            p1.play_pattern([(140, 0)])   # confirm beep at the new volume
+        return jsonify(ok=True, volume=applied)
 
     @app.post("/api/diagnostics/piezo_freq")
     def api_piezo_freq():
