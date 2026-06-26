@@ -592,7 +592,24 @@ def create_app(
     @app.get("/api/beeps")
     def api_beeps():
         return jsonify(sections=beeps.catalog(), harmony_modes=beeps.harmony_modes(),
-                       piezo_volume=cfg.get("piezo_volume", 100))
+                       piezo_volume=cfg.get("piezo_volume", 100),
+                       gesture_sounds=cfg.get("gesture_sounds", {}))
+
+    @app.post("/api/gesture_sounds")
+    def api_gesture_sounds():
+        body = _body()
+        gesture = str(body.get("gesture", ""))
+        if gesture not in ("tap", "double", "triple", "quad", "hold"):
+            return jsonify(ok=False, error="bad gesture"), 400
+        gs = dict(cfg.get("gesture_sounds") or {})
+        name = str(body.get("name", "")).strip()
+        if name:
+            gs[gesture] = {"name": name, "duet": bool(body.get("duet")),
+                           "harmony": str(body.get("harmony", "3rd above"))}
+        else:
+            gs.pop(gesture, None)   # cleared -> back to the default cue
+        cfg.update({"gesture_sounds": gs})
+        return jsonify(ok=True, gesture_sounds=gs)
 
     @app.post("/api/diagnostics/beep")
     def api_diag_beep():

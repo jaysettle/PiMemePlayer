@@ -523,41 +523,59 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
                 hold_time=settings.get("long_press_ms", 700) / 1000,
             )
 
+            def _gesture_cue(gesture, default_fn) -> None:
+                # Play the beep-playground sound assigned to this gesture (a duet if
+                # configured); else the built-in default R2 cue. Read live from
+                # settings so assignments take effect without a restart.
+                asn = (settings.get("gesture_sounds") or {}).get(gesture)
+                name = asn.get("name") if isinstance(asn, dict) else None
+                if name:
+                    from . import beeps
+                    if asn.get("duet"):
+                        pairs = beeps.harmonize_named(name, asn.get("harmony") or "3rd above")
+                        if pairs:
+                            play_duet(piezo, piezo2, pairs)
+                            return
+                    tune = beeps.find(name)
+                    if tune:
+                        piezo.play_tones(tune)
+                        return
+                default_fn()
+
             def short() -> None:
                 # Tap = replay the current sound.
                 engine.play_selected()
-                piezo.play_tones(R2_TAP)
+                _gesture_cue("tap", lambda: piezo.play_tones(R2_TAP))
 
             def double() -> None:
                 # Double-tap = surprise me (random sound, plays it).
                 engine.play_random()
-                piezo.play_tones(R2_RANDOM)
+                _gesture_cue("double", lambda: piezo.play_tones(R2_RANDOM))
 
             def long() -> None:
-                # Hold = the droid "talks" — a C-3PO/R2-D2 chatter on the piezo —
-                # AND advances + plays the meme on the speaker (piezo and the BT
-                # speaker are separate, so both happen at once). Respects shuffle:
-                # random clip when on, next in order when off.
-                piezo.droid()
+                # Hold = the droid "talks" (default) AND advances + plays the meme on
+                # the BT speaker (piezo and speaker are separate). Respects shuffle.
+                _gesture_cue("hold", lambda: piezo.droid())
                 if settings.get("mode", "sequential") == "random":
                     engine.play_random()
                 else:
                     engine.step_and_play(+1)
 
             def triple() -> None:
-                # Triple-tap = START GPS logging (force it on) + an excited R2-D2
-                # chirp. It auto-stops after ~20s back on home Wi-Fi.
+                # Triple-tap = START GPS logging (force it on); cue defaults to an
+                # excited R2 chirp. Auto-stops after ~20s back on home Wi-Fi.
                 if gps is not None:
                     gps.set_override("on")
-                piezo.play_tones(R2_LOG)
+                _gesture_cue("triple", lambda: piezo.play_tones(R2_LOG))
 
             def quad() -> None:
-                # Quad-tap = toggle the Wi-Fi hotspot, with an R2-D2 whistle-up for
-                # ON or whistle-down for OFF. Connect a phone to it on the ride.
+                # Quad-tap = toggle the Wi-Fi hotspot; cue defaults to a whistle
+                # up (on) / down (off).
                 from . import hotspot
                 going_on = hotspot.status() != "on"
                 hotspot.toggle()
-                piezo.play_tones(R2_HOTSPOT_ON if going_on else R2_HOTSPOT_OFF)
+                _gesture_cue("quad", lambda: piezo.play_tones(
+                    R2_HOTSPOT_ON if going_on else R2_HOTSPOT_OFF))
 
             _ClickHandler(
                 settings, short, double, long, handles,

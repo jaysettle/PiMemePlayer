@@ -611,6 +611,17 @@
           <select id="harmonyMode" style="display:none; min-width:110px"></select>
         </div>
         <div id="beepButtons" class="row" style="flex-wrap:wrap; gap:8px; margin-top:12px">open to load…</div>
+
+        <div class="sectionBox" style="margin-top:16px">
+          <b>🎛 Assign sounds to button gestures</b>
+          <div class="mini" style="margin-top:4px">Tap a sound above to <b>select</b> it, then click a gesture below to bind it — that physical encoder gesture will play it on the piezo. (The meme / GPS / hotspot action still runs.) Choose <b>— default —</b> then a gesture to reset that one.</div>
+          <div class="row" style="margin-top:8px; align-items:center; gap:10px; flex-wrap:wrap">
+            <span class="mini">Selected:</span> <b id="selSound">— default cue —</b>
+            <button class="ghost" type="button" onclick="selectSound(null)">— default —</button>
+            <button class="ghost" type="button" onclick="if(_selSound) playBeep(_selSound.name, _selSound.duet)">▶ preview</button>
+          </div>
+          <div class="row" id="gestureAssign" style="margin-top:10px; flex-wrap:wrap; gap:8px"></div>
+        </div>
       </details>
 
       <details class="sectionBox" open>
@@ -1400,7 +1411,35 @@
         toast("System tone set to " + r.freq + " Hz" + (r.hardware ? " (hardware PWM)" : " (software PWM)"));
       }catch(e){ toast(e.message); }
     }
-    let _beepsData = null, _harmonyModes = [];
+    let _beepsData = null, _harmonyModes = [], _selSound = null, _gestureSounds = {};
+    const _GESTURES = {tap:"Tap", double:"Double-tap", triple:"Triple-tap", quad:"Quad-tap", hold:"Hold"};
+    function selectSound(s){
+      _selSound = s;
+      const el = $("selSound");
+      if(el) el.textContent = s ? (s.name + (s.duet ? (" ♫ " + (s.harmony||"")) : "")) : "— default cue —";
+    }
+    function renderGestureAssign(){
+      const wrap = $("gestureAssign"); if(!wrap) return;
+      wrap.innerHTML = "";
+      Object.keys(_GESTURES).forEach(g => {
+        const a = _gestureSounds[g];
+        const b = document.createElement("button");
+        b.className = a ? "primary" : "ghost"; b.type = "button";
+        b.textContent = _GESTURES[g] + ": " + (a ? (a.name + (a.duet ? " ♫" : "")) : "default");
+        b.onclick = () => assignGesture(g);
+        wrap.appendChild(b);
+      });
+    }
+    async function assignGesture(g){
+      const s = _selSound;
+      try{
+        const r = await api("/api/gesture_sounds",
+          s ? {gesture:g, name:s.name, duet:!!s.duet, harmony:s.harmony||"3rd above"} : {gesture:g, name:""});
+        _gestureSounds = r.gesture_sounds || {};
+        toast(_GESTURES[g] + " → " + (s ? s.name : "default"));
+        renderGestureAssign();
+      }catch(e){ toast(e.message || "assign failed"); }
+    }
     async function loadBeeps(){
       if(_beepsData) return;
       let d;
@@ -1409,6 +1448,8 @@
       _harmonyModes = d.harmony_modes || [];
       const pv = $("piezoVol");
       if(pv && d.piezo_volume != null){ pv.value = d.piezo_volume; $("piezoVolLbl").textContent = d.piezo_volume; }
+      _gestureSounds = d.gesture_sounds || {};
+      renderGestureAssign();
       const sel = $("beepSection");
       sel.innerHTML = "";
       Object.keys(_beepsData).forEach(s => {
@@ -1436,7 +1477,10 @@
       (sec.tunes || []).forEach(n => {
         const b = document.createElement("button");
         b.className = sec.duet ? "primary" : "ghost"; b.type = "button"; b.textContent = n;
-        b.onclick = () => playBeep(n, sec.duet);
+        b.onclick = () => {
+          selectSound({name:n, duet:!!sec.duet, harmony: sec.duet ? (($("harmonyMode")||{}).value || "3rd above") : ""});
+          playBeep(n, sec.duet);
+        };
         wrap.appendChild(b);
       });
     }

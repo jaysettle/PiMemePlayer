@@ -29,6 +29,9 @@ DEFAULTS: Dict[str, Any] = {
     "piezo2_pin": 18,            # 2nd piezo for harmony (PWM ch0 / GPIO18); -1 = none
     "piezo_freq": 2000,          # system tone (Hz) for all the cue beeps
     "piezo_volume": 100,         # 0..100 piezo loudness (scales PWM duty); live
+    # Per-gesture piezo sound from the beep playground (overrides the default cue).
+    # {gesture: {name, duet, harmony}} for tap/double/triple/quad/hold.
+    "gesture_sounds": {},
     # input behaviour
     "double_click_ms": 350,
     "long_press_ms": 700,
