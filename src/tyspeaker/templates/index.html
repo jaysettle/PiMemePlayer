@@ -597,7 +597,11 @@
       <details class="sectionBox" ontoggle="if(this.open) loadBeeps()">
         <summary>🎵 Beep playground</summary>
         <div class="mini">Tap a tune to hear it on the piezo. The famous melodies use real RTTTL note data (the Nokia ringtone format); R2-D2 chirps and alerts are sound effects. The buzzer is loudest near 2&nbsp;kHz, so volume varies a little across a melody.</div>
-        <div id="beepPlayground" style="margin-top:12px">open to load…</div>
+        <div class="row" style="margin-top:12px; align-items:center; gap:10px">
+          <span class="mini">Section</span>
+          <select id="beepSection" onchange="renderBeepSection(this.value)" style="min-width:170px"></select>
+        </div>
+        <div id="beepButtons" class="row" style="flex-wrap:wrap; gap:8px; margin-top:12px">open to load…</div>
       </details>
 
       <details class="sectionBox" open>
@@ -1387,24 +1391,29 @@
         toast("System tone set to " + r.freq + " Hz" + (r.hardware ? " (hardware PWM)" : " (software PWM)"));
       }catch(e){ toast(e.message); }
     }
-    let _beepsLoaded = false;
+    let _beepsData = null;
     async function loadBeeps(){
-      const wrap = $("beepPlayground"); if(!wrap || _beepsLoaded) return;
+      if(_beepsData) return;
       let d;
-      try{ d = await api("/api/beeps"); }catch(e){ wrap.textContent = "Could not load beeps."; return; }
-      const secs = d.sections || {};
-      let html = "";
-      Object.keys(secs).forEach(sec => {
-        html += '<div style="margin-top:14px"><b style="color:var(--gold)">' + sec + '</b>'
-              + '<div class="row" style="flex-wrap:wrap; gap:8px; margin-top:8px">';
-        secs[sec].forEach(name => {
-          const safe = name.replace(/'/g, "\\'");
-          html += '<button class="ghost" type="button" onclick="playBeep(\'' + safe + '\')">' + name + '</button>';
-        });
-        html += '</div></div>';
+      try{ d = await api("/api/beeps"); }catch(e){ $("beepButtons").textContent = "Could not load beeps."; return; }
+      _beepsData = d.sections || {};
+      const sel = $("beepSection");
+      sel.innerHTML = "";
+      Object.keys(_beepsData).forEach(s => {
+        const o = document.createElement("option"); o.value = s; o.textContent = s; sel.appendChild(o);
       });
-      wrap.innerHTML = html || "No beeps.";
-      _beepsLoaded = true;
+      const first = Object.keys(_beepsData)[0];
+      if(first){ sel.value = first; renderBeepSection(first); }
+    }
+    function renderBeepSection(name){
+      const wrap = $("beepButtons"); if(!wrap || !_beepsData) return;
+      wrap.innerHTML = "";
+      (_beepsData[name] || []).forEach(n => {
+        const b = document.createElement("button");
+        b.className = "ghost"; b.type = "button"; b.textContent = n;
+        b.onclick = () => playBeep(n);
+        wrap.appendChild(b);
+      });
     }
     async function playBeep(name){
       try{ const r = await api("/api/diagnostics/beep", {name}); if(!r.wired) toast("No buzzer wired on the pin"); }

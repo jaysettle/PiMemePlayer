@@ -281,6 +281,10 @@ def create_app(
     enable_bt_autoconnect: bool = True,
 ) -> Flask:
     app = Flask(__name__)
+    try:
+        app.json.sort_keys = False   # preserve intended order (e.g. beep sections)
+    except AttributeError:
+        app.config["JSON_SORT_KEYS"] = False
     app.config["MAX_CONTENT_LENGTH"] = config.MAX_UPLOAD_BYTES
 
     cfg = settings or Settings()
