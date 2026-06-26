@@ -182,12 +182,12 @@ CUE_RANDOM = [(70, 90), (70, 90), (70, 0)]    # double -> random: 3 beeps
 CUE_WRAP = [(320, 0)]                         # looped back to #1: 1 long beep
 CUE_VOL_UP = [(45, 0)]                         # turn: 1 quick tick
 CUE_VOL_DOWN = [(45, 0)]                       # turn: 1 quick tick
-CUE_HOTSPOT = [(60, 60), (60, 60), (60, 60), (260, 0)]  # (legacy)
-# Triple -> START logging: a proud, heroic rising "Superman" fanfare (freq_hz, ms).
-SUPERMAN = [(784, 110), (1047, 110), (1319, 110), (0, 40), (1568, 450)]
-# Quad -> hotspot ON: rising signature; OFF: descending power-down.
-CUE_HOTSPOT_ON = [(1200, 90), (1700, 90), (2200, 220)]
-CUE_HOTSPOT_OFF = [(2200, 90), (1500, 90), (1000, 260)]
+# Each gesture gets its own distinct R2-D2 voice (freq_hz, ms); hold = full droid().
+R2_TAP = [(2600, 70), (3200, 150)]                                  # tap/replay: quick "affirmative"
+R2_RANDOM = [(1800, 80), (2400, 80), (3000, 150)]                   # double/random: curious rising
+R2_LOG = [(2600, 50), (3200, 50), (2600, 50), (3400, 70), (3000, 160)]  # triple/start log: excited
+R2_HOTSPOT_ON = [(1500, 35), (1900, 35), (2300, 35), (2700, 35), (3100, 35), (3500, 120)]   # quad on: whistle up
+R2_HOTSPOT_OFF = [(3500, 35), (3100, 35), (2700, 35), (2300, 35), (1900, 35), (1500, 120)]  # quad off: whistle down
 
 
 class _ClickHandler:
@@ -477,12 +477,12 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
             def short() -> None:
                 # Tap = replay the current sound.
                 engine.play_selected()
-                piezo.play_pattern(CUE_TICK)
+                piezo.play_tones(R2_TAP)
 
             def double() -> None:
                 # Double-tap = surprise me (random sound, plays it).
                 engine.play_random()
-                piezo.play_pattern(CUE_RANDOM)
+                piezo.play_tones(R2_RANDOM)
 
             def long() -> None:
                 # Hold = the droid "talks" — a C-3PO/R2-D2 chatter on the piezo —
@@ -496,19 +496,19 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
                     engine.step_and_play(+1)
 
             def triple() -> None:
-                # Triple-tap = START GPS logging (force it on) + a proud Superman
-                # fanfare. It auto-stops after ~20s back on home Wi-Fi.
+                # Triple-tap = START GPS logging (force it on) + an excited R2-D2
+                # chirp. It auto-stops after ~20s back on home Wi-Fi.
                 if gps is not None:
                     gps.set_override("on")
-                piezo.play_tones(SUPERMAN)
+                piezo.play_tones(R2_LOG)
 
             def quad() -> None:
-                # Quad-tap = toggle the Wi-Fi hotspot, with a rising "on" beep or a
-                # descending "off" beep. Connect a phone to it on the ride.
+                # Quad-tap = toggle the Wi-Fi hotspot, with an R2-D2 whistle-up for
+                # ON or whistle-down for OFF. Connect a phone to it on the ride.
                 from . import hotspot
                 going_on = hotspot.status() != "on"
                 hotspot.toggle()
-                piezo.play_tones(CUE_HOTSPOT_ON if going_on else CUE_HOTSPOT_OFF)
+                piezo.play_tones(R2_HOTSPOT_ON if going_on else R2_HOTSPOT_OFF)
 
             _ClickHandler(
                 settings, short, double, long, handles,
