@@ -594,6 +594,12 @@
         <div id="diagErrors" class="mini" style="margin-top:12px"></div>
       </details>
 
+      <details class="sectionBox" ontoggle="if(this.open) loadActions()">
+        <summary>🎚 Button actions</summary>
+        <div class="mini">What each physical encoder gesture does. Change the <b>action</b> here; assign the <b>sound</b> in the Beep playground below. (A gesture runs its action AND plays its sound.)</div>
+        <div id="actionRows" style="margin-top:12px">open to load…</div>
+      </details>
+
       <details class="sectionBox" ontoggle="if(this.open) loadBeeps()">
         <summary>🎵 Beep playground</summary>
         <div class="mini">Tap a tune to hear it on the piezo. The famous melodies use real RTTTL note data (the Nokia ringtone format); R2-D2 chirps and alerts are sound effects. The buzzer is loudest near 2&nbsp;kHz, so volume varies a little across a melody.</div>
@@ -1439,6 +1445,27 @@
         toast(_GESTURES[g] + " → " + (s ? s.name : "default"));
         renderGestureAssign();
       }catch(e){ toast(e.message || "assign failed"); }
+    }
+    async function loadActions(){
+      const wrap = $("actionRows"); if(!wrap) return;
+      let d;
+      try{ d = await api("/api/actions"); }catch(e){ wrap.textContent = "Could not load actions."; return; }
+      let html = "";
+      Object.keys(_GESTURES).forEach(g => {
+        const cur = (d.gesture_actions||{})[g] || (d.defaults||{})[g] || "none";
+        const snd = (d.gesture_sounds||{})[g];
+        const opts = (d.actions||[]).map(a => '<option value="'+a.id+'"'+(a.id===cur?' selected':'')+'>'+a.label+'</option>').join("");
+        html += '<div class="row" style="align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap">'
+              + '<b style="min-width:92px">'+_GESTURES[g]+'</b>'
+              + '<select onchange="setAction(\''+g+'\', this.value)" style="min-width:190px">'+opts+'</select>'
+              + '<span class="mini">sound: '+(snd ? (snd.name+(snd.duet?" ♫":"")) : "default cue")+'</span>'
+              + '</div>';
+      });
+      wrap.innerHTML = html;
+    }
+    async function setAction(g, action){
+      try{ await api("/api/gesture_actions", {gesture:g, action}); toast(_GESTURES[g] + " → " + action); }
+      catch(e){ toast(e.message || "failed"); }
     }
     async function loadBeeps(){
       if(_beepsData) return;

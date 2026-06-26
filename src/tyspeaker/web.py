@@ -18,7 +18,7 @@ from . import beeps
 from . import hotspot
 from .gps import GpsReader
 from .gps_stats import GpsStats
-from .inputs import play_duet, start_inputs
+from .inputs import ACTION_LABELS, DEFAULT_ACTIONS, play_duet, start_inputs
 from .library import Library
 from .logsetup import configure_logging, get_logger, recent_logs
 from .power import power_status
@@ -594,6 +594,30 @@ def create_app(
         return jsonify(sections=beeps.catalog(), harmony_modes=beeps.harmony_modes(),
                        piezo_volume=cfg.get("piezo_volume", 100),
                        gesture_sounds=cfg.get("gesture_sounds", {}))
+
+    @app.get("/api/actions")
+    def api_actions():
+        return jsonify(
+            actions=[{"id": k, "label": v} for k, v in ACTION_LABELS.items()],
+            defaults=DEFAULT_ACTIONS,
+            gesture_actions=cfg.get("gesture_actions", {}),
+            gesture_sounds=cfg.get("gesture_sounds", {}),
+        )
+
+    @app.post("/api/gesture_actions")
+    def api_gesture_actions():
+        body = _body()
+        gesture = str(body.get("gesture", ""))
+        if gesture not in ("tap", "double", "triple", "quad", "hold"):
+            return jsonify(ok=False, error="bad gesture"), 400
+        action = str(body.get("action", ""))
+        ga = dict(cfg.get("gesture_actions") or {})
+        if action and action in ACTION_LABELS:
+            ga[gesture] = action
+        else:
+            ga.pop(gesture, None)   # empty/unknown -> revert to the default
+        cfg.update({"gesture_actions": ga})
+        return jsonify(ok=True, gesture_actions=ga)
 
     @app.post("/api/gesture_sounds")
     def api_gesture_sounds():

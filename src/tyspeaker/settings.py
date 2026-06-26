@@ -32,6 +32,8 @@ DEFAULTS: Dict[str, Any] = {
     # Per-gesture piezo sound from the beep playground (overrides the default cue).
     # {gesture: {name, duet, harmony}} for tap/double/triple/quad/hold.
     "gesture_sounds": {},
+    # Per-gesture ACTION override {gesture: action_id} (empty = built-in defaults).
+    "gesture_actions": {},
     # input behaviour
     "double_click_ms": 350,
     "long_press_ms": 700,

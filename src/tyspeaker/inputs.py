@@ -231,6 +231,31 @@ R2_LOG = [(2600, 50), (3200, 50), (2600, 50), (3400, 70), (3000, 160)]  # triple
 R2_HOTSPOT_ON = [(1500, 35), (1900, 35), (2300, 35), (2700, 35), (3100, 35), (3500, 120)]   # quad on: whistle up
 R2_HOTSPOT_OFF = [(3500, 35), (3100, 35), (2700, 35), (2300, 35), (1900, 35), (1500, 120)]  # quad off: whistle down
 
+# Assignable button ACTIONS (id -> human label, for the Settings UI/API). The
+# matching callables are built per-run in start_inputs (they need engine/gps/etc).
+ACTION_LABELS = {
+    "none":       "Nothing (sound only)",
+    "play":       "Play current meme",
+    "random":     "Random meme",
+    "next":       "Next meme",
+    "advance":    "Next meme (random if shuffle)",
+    "prev":       "Previous meme",
+    "vol_up":     "Speaker volume +",
+    "vol_down":   "Speaker volume −",
+    "piezo_up":   "Piezo volume +",
+    "piezo_down": "Piezo volume −",
+    "shuffle":    "Toggle shuffle",
+    "gps_start":  "Start GPS logging",
+    "gps_stop":   "Stop GPS logging",
+    "gps_auto":   "GPS logging: auto",
+    "hotspot":    "Toggle Wi-Fi hotspot",
+    "droid":      "Droid chatter",
+    "reboot":     "Reboot the Pi",
+}
+# Default action per gesture (reproduces the original hard-wired behaviour).
+DEFAULT_ACTIONS = {"tap": "play", "double": "random", "triple": "gps_start",
+                   "quad": "hotspot", "hold": "advance"}
+
 
 class _ClickHandler:
     """Detect short / double / long press on a gpiozero Button."""
@@ -542,44 +567,73 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
                         return
                 default_fn()
 
-            def short() -> None:
-                # Tap = replay the current sound.
-                engine.play_selected()
-                _gesture_cue("tap", lambda: piezo.play_tones(R2_TAP))
+            def _piezo_vol(delta) -> None:
+                v = max(0, min(100, int(round(piezo.volume * 100)) + delta))
+                piezo.set_volume(v)
+                piezo2.set_volume(v)
+                settings.update({"piezo_volume": v})
 
-            def double() -> None:
-                # Double-tap = surprise me (random sound, plays it).
-                engine.play_random()
-                _gesture_cue("double", lambda: piezo.play_tones(R2_RANDOM))
+            def _toggle_shuffle() -> None:
+                cur = settings.get("mode", "sequential")
+                settings.update({"mode": "random" if cur == "sequential" else "sequential"})
 
-            def long() -> None:
-                # Hold = the droid "talks" (default) AND advances + plays the meme on
-                # the BT speaker (piezo and speaker are separate). Respects shuffle.
-                _gesture_cue("hold", lambda: piezo.droid())
-                if settings.get("mode", "sequential") == "random":
-                    engine.play_random()
-                else:
-                    engine.step_and_play(+1)
-
-            def triple() -> None:
-                # Triple-tap = START GPS logging (force it on); cue defaults to an
-                # excited R2 chirp. Auto-stops after ~20s back on home Wi-Fi.
-                if gps is not None:
-                    gps.set_override("on")
-                _gesture_cue("triple", lambda: piezo.play_tones(R2_LOG))
-
-            def quad() -> None:
-                # Quad-tap = toggle the Wi-Fi hotspot; cue defaults to a whistle
-                # up (on) / down (off).
+            def _hotspot() -> None:
                 from . import hotspot
-                going_on = hotspot.status() != "on"
                 hotspot.toggle()
-                _gesture_cue("quad", lambda: piezo.play_tones(
-                    R2_HOTSPOT_ON if going_on else R2_HOTSPOT_OFF))
+
+            def _reboot() -> None:
+                import subprocess
+                try:
+                    subprocess.Popen(["sudo", "-n", "/usr/bin/systemctl", "reboot"])
+                except Exception:
+                    pass
+
+            # action id -> callable (closures over engine/gps/piezo/etc.)
+            ACTIONS = {
+                "none": lambda: None,
+                "play": engine.play_selected,
+                "random": engine.play_random,
+                "next": lambda: engine.step_and_play(+1),
+                "advance": lambda: (engine.play_random()
+                                    if settings.get("mode", "sequential") == "random"
+                                    else engine.step_and_play(+1)),
+                "prev": lambda: engine.step_and_play(-1),
+                "vol_up": lambda: engine.volume_step(+10),
+                "vol_down": lambda: engine.volume_step(-10),
+                "piezo_up": lambda: _piezo_vol(+10),
+                "piezo_down": lambda: _piezo_vol(-10),
+                "shuffle": _toggle_shuffle,
+                "gps_start": lambda: gps.set_override("on") if gps else None,
+                "gps_stop": lambda: gps.set_override("off") if gps else None,
+                "gps_auto": lambda: gps.set_override("auto") if gps else None,
+                "hotspot": _hotspot,
+                "droid": piezo.droid,
+                "reboot": _reboot,
+            }
+            _DEFAULT_CUE = {
+                "tap": lambda: piezo.play_tones(R2_TAP),
+                "double": lambda: piezo.play_tones(R2_RANDOM),
+                "triple": lambda: piezo.play_tones(R2_LOG),
+                "quad": lambda: piezo.play_tones(R2_HOTSPOT_ON),
+                "hold": piezo.droid,
+            }
+
+            def _run(gesture) -> None:
+                # Run the gesture's assigned ACTION (or its default), then play its
+                # assigned SOUND (or default cue). Both read live from settings.
+                aid = (settings.get("gesture_actions") or {}).get(gesture) or DEFAULT_ACTIONS[gesture]
+                fn = ACTIONS.get(aid)
+                if fn:
+                    try:
+                        fn()
+                    except Exception as exc:
+                        log.debug("gesture %s action %s failed: %s", gesture, aid, exc)
+                _gesture_cue(gesture, _DEFAULT_CUE.get(gesture, lambda: None))
 
             _ClickHandler(
-                settings, short, double, long, handles,
-                on_triple=triple, on_quad=quad,
+                settings,
+                lambda: _run("tap"), lambda: _run("double"), lambda: _run("hold"),
+                handles, on_triple=lambda: _run("triple"), on_quad=lambda: _run("quad"),
             ).attach(btn)
             handles.button = btn
         except Exception as exc:
