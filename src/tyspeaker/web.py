@@ -312,7 +312,6 @@ def create_app(
         if enable_bt_autoconnect
         else None
     )
-    inputs = start_inputs(cfg, eng) if enable_inputs else None
     gps = (
         GpsReader(
             config.GPS_PORT, config.GPS_BAUD,
@@ -323,10 +322,13 @@ def create_app(
             get_battery=power_status,
             home_prefix=str(cfg.get("gps_home_prefix", "192.168.3.")),
             away_debounce_s=int(cfg.get("gps_away_debounce_s", 10)),
+            home_debounce_s=int(cfg.get("gps_home_debounce_s", 20)),
+            log_always=bool(cfg.get("gps_log_always", True)),
         ).start()
         if config.GPS_PORT
         else None
     )
+    inputs = start_inputs(cfg, eng, gps=gps) if enable_inputs else None
     gps_stats = GpsStats(config.GPS_LOG_DIR)
     app.config["TYSPEAKER_INPUTS"] = inputs  # keep refs alive
     app.config["TYSPEAKER_BT_AUTOCONNECT"] = bt_auto
@@ -512,6 +514,14 @@ def create_app(
             return jsonify(error="mode must be auto|on|off"), 400
         applied = gps.set_override(mode) if gps is not None else "auto"
         return jsonify(ok=True, log_override=applied)
+
+    @app.post("/api/gps/log_always")
+    def api_gps_log_always():
+        on = bool(_body().get("on"))
+        cfg.update({"gps_log_always": on})
+        if gps is not None:
+            gps.set_log_always(on)
+        return jsonify(ok=True, log_always=on)
 
     @app.get("/api/gps/days")
     def api_gps_days():

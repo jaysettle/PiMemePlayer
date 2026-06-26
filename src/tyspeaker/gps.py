@@ -97,6 +97,8 @@ class GpsReader:
         sync_clock: bool = True,
         home_prefix: str = "192.168.3.",
         away_debounce_s: int = 10,
+        home_debounce_s: int = 20,
+        log_always: bool = True,
     ) -> None:
         self.port = port
         self.baud = baud
@@ -120,9 +122,16 @@ class GpsReader:
         # incl. when on the Pi's own hotspot). A manual override forces it.
         self.home_prefix = home_prefix
         self.away_debounce = max(0, int(away_debounce_s))
+        self.home_debounce = max(0, int(home_debounce_s))
+        # PROVING MODE: when True, record EVERY fix regardless of the gate, so we
+        # never miss data while the triggers are being validated. The flight
+        # recorder still logs whether the gate WOULD have fired (would_log/why),
+        # so we can verify the network/override logic against the full track.
+        self.log_always = bool(log_always)
         self.log_override = "auto"   # "auto" | "on" | "off" (runtime; resets at home)
         self._home_now = True
         self._away_since: Optional[float] = None
+        self._home_since: Optional[float] = None
         # Log only a GOOD, MOVING fix. Indoors the fix is weak (few satellites,
         # high HDOP) and throws fake speeds up to ~12 mph, so speed alone leaks.
         # Satellite count is the clean discriminator: indoor jitter uses 3-6
@@ -327,9 +336,14 @@ class GpsReader:
         with self._lock:
             snap = dict(self._state)
             raw = list(self._raw)
-        # Quality + movement gate: only log a GOOD, MOVING fix.
         passes, _reason = self._gate(snap)
-        if not passes:
+        if self.log_always:
+            # Proving mode: record every actual fix regardless of the gate.
+            if not (snap.get("fix") and snap.get("lat") is not None
+                    and snap.get("lon") is not None):
+                self._skipped += 1
+                return
+        elif not passes:
             self._skipped += 1
             return
         lt = time.localtime(now)
@@ -360,17 +374,21 @@ class GpsReader:
     def _update_net(self) -> None:
         home = home_ip_present(self.home_prefix)
         now = time.monotonic()
-        was_home = self._home_now
         self._home_now = home
         if home:
             self._away_since = None
-            # Reset the override only on the away->home TRANSITION (coming back
-            # from a ride), not continuously — so you can still force it at home.
-            if not was_home and self.log_override != "auto":
-                log.info("home network back; GPS override reset to auto")
+            if self._home_since is None:
+                self._home_since = now
+            # Stop (reset override) only after we've been home for home_debounce
+            # seconds — so merely PASSING BY the house mid-ride doesn't stop it.
+            if (now - self._home_since) >= self.home_debounce and self.log_override != "auto":
+                log.info("home for %ds; GPS logging stopped (override -> auto)",
+                         int(now - self._home_since))
                 self.log_override = "auto"
-        elif self._away_since is None:
-            self._away_since = now
+        else:
+            self._home_since = None
+            if self._away_since is None:
+                self._away_since = now
 
     def away_seconds(self) -> float:
         if self._home_now or self._away_since is None:
@@ -381,6 +399,10 @@ class GpsReader:
         mode = mode if mode in ("auto", "on", "off") else "auto"
         self.log_override = mode
         return mode
+
+    def set_log_always(self, on: bool) -> bool:
+        self.log_always = bool(on)
+        return self.log_always
 
     def _gate(self, snap: Dict[str, Any]):
         """(passes, reason): record the track when we're away from home Wi-Fi
@@ -501,6 +523,16 @@ class GpsReader:
             self.available and self._sentences > 0 and (now - self._last_rx) < 5.0
         )
         passes, reason = self._gate(snap)
+        has_fix = bool(
+            snap.get("fix") and snap.get("lat") is not None
+            and snap.get("lon") is not None
+        )
+        if self.log_always:
+            logging_now = has_fix
+            why_not = None if has_fix else "no fix yet"
+        else:
+            logging_now = passes
+            why_not = None if passes else reason
         return {
             "available": self.available,
             "port": self.port,
@@ -516,12 +548,16 @@ class GpsReader:
             "log_count": self._log_count,
             "log_interval": self.log_interval,
             "skipped_logs": self._skipped,
-            "logging_now": passes,        # is it recording the track right now?
-            "why_not": None if passes else reason,
+            "logging_now": logging_now,    # actually recording the track right now?
+            "why_not": why_not,
+            "gate_pass": passes,           # what the network/override gate would do
+            "gate_why": reason,
             "on_home_wifi": self._home_now,
             "away_seconds": round(self.away_seconds(), 0),
             "away_debounce": self.away_debounce,
+            "home_debounce": self.home_debounce,
             "log_override": self.log_override,
+            "log_always": self.log_always,
             "home_prefix": self.home_prefix,
             "diag_file": self._diag_file.name if self._diag_file else None,
             "diag_count": self._diag_count,

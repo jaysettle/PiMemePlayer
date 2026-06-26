@@ -423,11 +423,16 @@
           <button class="primary" id="ovOn" onclick="setGpsOverride('on')" type="button">Force ON</button>
           <button class="ghost danger" id="ovOff" onclick="setGpsOverride('off')" type="button">Force OFF</button>
         </div>
-        <div class="mini" style="margin-top:6px">Auto records whenever you've been away from home Wi-Fi for &gt;10s (including on the Pi's hotspot). Force ON/OFF override that, and snap back to Auto when you reconnect to the home network.</div>
+        <div class="mini" style="margin-top:6px">Auto-starts when away from home Wi-Fi &gt;10s and auto-stops after &gt;20s back home. <b>Triple-tap</b> the button force-starts it (proud beep). Force ON/OFF here override it.</div>
+        <div class="row" style="margin-top:10px; align-items:center; gap:10px">
+          <b style="color:var(--gold)">Proving mode</b>
+          <span class="mini">log every fix, ignore the gate — keep this ON until the triggers are proven</span>
+          <button class="ghost" id="logAlwaysBtn" onclick="toggleLogAlways()" type="button" data-on="0" style="margin-left:auto">--</button>
+        </div>
         <div class="row" style="margin-top:10px; align-items:center; gap:10px">
           <b>Hotspot</b>
           <span id="hsState" class="pill">—</span>
-          <span class="mini">SSID <code>tyspeaker</code> — connect a phone on the ride (triple-tap the button does this too).</span>
+          <span class="mini">SSID <code>tyspeaker</code> — connect a phone on the ride (<b>quad-tap</b> the button does this too).</span>
           <button class="ghost" id="hsBtn" onclick="toggleHotspot()" type="button" style="margin-left:auto">Toggle hotspot</button>
         </div>
       </div>
@@ -1564,11 +1569,21 @@
       ["ovAuto","ovOn","ovOff"].forEach(id => { const b = $(id); if(b) b.style.outline = ""; });
       const active = $(ov === "on" ? "ovOn" : ov === "off" ? "ovOff" : "ovAuto");
       if(active) active.style.outline = "2px solid var(--accent2)";
+      const la = $("logAlwaysBtn");
+      if(la){ const on = !!d.log_always; la.dataset.on = on ? "1" : "0"; la.textContent = on ? "ON" : "off"; la.className = on ? "primary" : "ghost"; }
     }
     async function setGpsOverride(mode){
       try{
         const r = await api("/api/gps/override", {mode});
         toast("Logging override: " + r.log_override.toUpperCase());
+        loadGpsLogState();
+      }catch(e){ toast(e.message); }
+    }
+    async function toggleLogAlways(){
+      const cur = ($("logAlwaysBtn")||{}).dataset?.on === "1";
+      try{
+        const r = await api("/api/gps/log_always", {on: !cur});
+        toast("Proving mode (log everything): " + (r.log_always ? "ON" : "off"));
         loadGpsLogState();
       }catch(e){ toast(e.message); }
     }

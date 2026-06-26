@@ -37,7 +37,9 @@ DEFAULTS: Dict[str, Any] = {
     "gps_log_min_sats": 7,
     "gps_log_max_hdop": 3.0,
     "gps_home_prefix": "192.168.3.",  # home Wi-Fi subnet; off it = "out riding"
-    "gps_away_debounce_s": 10,        # log after being away this many seconds
+    "gps_away_debounce_s": 10,        # auto-start logging after away this long
+    "gps_home_debounce_s": 20,        # stop only after home this long (not passing by)
+    "gps_log_always": True,           # PROVING MODE: log every fix regardless of gates
 }
 
 # Settings that only take effect after a service restart (GPIO devices).

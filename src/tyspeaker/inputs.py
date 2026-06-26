@@ -182,7 +182,12 @@ CUE_RANDOM = [(70, 90), (70, 90), (70, 0)]    # double -> random: 3 beeps
 CUE_WRAP = [(320, 0)]                         # looped back to #1: 1 long beep
 CUE_VOL_UP = [(45, 0)]                         # turn: 1 quick tick
 CUE_VOL_DOWN = [(45, 0)]                       # turn: 1 quick tick
-CUE_HOTSPOT = [(60, 60), (60, 60), (60, 60), (260, 0)]  # triple -> hotspot: 3 quick + 1 long
+CUE_HOTSPOT = [(60, 60), (60, 60), (60, 60), (260, 0)]  # (legacy)
+# Triple -> START logging: a proud, heroic rising "Superman" fanfare (freq_hz, ms).
+SUPERMAN = [(784, 110), (1047, 110), (1319, 110), (0, 40), (1568, 450)]
+# Quad -> hotspot ON: rising signature; OFF: descending power-down.
+CUE_HOTSPOT_ON = [(1200, 90), (1700, 90), (2200, 220)]
+CUE_HOTSPOT_OFF = [(2200, 90), (1500, 90), (1000, 260)]
 
 
 class _ClickHandler:
@@ -196,12 +201,14 @@ class _ClickHandler:
         on_long,
         diagnostics: "Inputs",
         on_triple=None,
+        on_quad=None,
     ) -> None:
         self._double_s = settings.get("double_click_ms", 350) / 1000
         self._on_short = on_short
         self._on_double = on_double
         self._on_long = on_long
         self._on_triple = on_triple
+        self._on_quad = on_quad
         self._diagnostics = diagnostics
         self._held = False
         self._count = 0
@@ -242,7 +249,10 @@ class _ClickHandler:
         n = self._count
         self._count = 0
         self._timer = None
-        if self._on_triple is not None and n >= 3:
+        if self._on_quad is not None and n >= 4:
+            self._diagnostics.note_button("quad")
+            self._safe(self._on_quad)
+        elif self._on_triple is not None and n == 3:
             self._diagnostics.note_button("triple")
             self._safe(self._on_triple)
         elif n >= 2:
@@ -286,6 +296,7 @@ class Inputs:
             "short": 0,
             "double": 0,
             "triple": 0,
+            "quad": 0,
         }
         self._last_encoder_direction = ""
         self._last_button_event = ""
@@ -396,7 +407,7 @@ def _bounce_seconds(value: Any) -> Optional[float]:
     return ms / 1000
 
 
-def start_inputs(settings: Settings, engine: PlaybackEngine) -> Inputs:
+def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs:
     handles = Inputs()
     try:
         from gpiozero import Button, RotaryEncoder
@@ -485,14 +496,23 @@ def start_inputs(settings: Settings, engine: PlaybackEngine) -> Inputs:
                     engine.step_and_play(+1)
 
             def triple() -> None:
-                # Triple-tap = toggle the Wi-Fi hotspot (so a phone can connect to
-                # the Pi on the ride). Reverts on the next triple-tap or a reboot.
+                # Triple-tap = START GPS logging (force it on) + a proud Superman
+                # fanfare. It auto-stops after ~20s back on home Wi-Fi.
+                if gps is not None:
+                    gps.set_override("on")
+                piezo.play_tones(SUPERMAN)
+
+            def quad() -> None:
+                # Quad-tap = toggle the Wi-Fi hotspot, with a rising "on" beep or a
+                # descending "off" beep. Connect a phone to it on the ride.
                 from . import hotspot
+                going_on = hotspot.status() != "on"
                 hotspot.toggle()
-                piezo.play_pattern(CUE_HOTSPOT)
+                piezo.play_tones(CUE_HOTSPOT_ON if going_on else CUE_HOTSPOT_OFF)
 
             _ClickHandler(
-                settings, short, double, long, handles, on_triple=triple
+                settings, short, double, long, handles,
+                on_triple=triple, on_quad=quad,
             ).attach(btn)
             handles.button = btn
         except Exception as exc:
