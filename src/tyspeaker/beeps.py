@@ -174,11 +174,47 @@ _ARCADE_FX = {
     "Wind":         _sweep(1800, 2600, 200, 8) + _sweep(2600, 1800, 200, 8),
 }
 
+_SCIFI_FX = {
+    "Phaser":       _sweep(2400, 3200, 60, 5) + _sweep(3200, 2400, 60, 5) + _sweep(2400, 3200, 60, 5),
+    "Siren":        _sweep(800, 2000, 200, 9) + _sweep(2000, 800, 200, 9),
+    "Alien":        [(1400, 80), (900, 80), (1700, 80), (1100, 80), (2000, 160)],
+    "Robot voice":  [(600, 60), (900, 50), (700, 60), (1000, 50), (650, 60), (950, 120)],
+    "Computer":     [(2200, 40), (2600, 40), (2000, 40), (2800, 40), (2400, 40), (3000, 80)],
+    "Radar ping":   [(2800, 60), (0, 220), (2800, 45), (0, 320), (2800, 30)],
+    "Sonar":        [(1200, 90), (0, 260), (1000, 90), (0, 360), (900, 90)],
+    "Beam":         _sweep(1500, 3000, 400, 20),
+    "Force field":  [(2000, 50), (2300, 50)] * 5,
+    "Static":       [(3000, 15), (800, 15), (2400, 15), (1200, 15), (3200, 15), (600, 15), (2800, 15), (1000, 15)],
+    "Glitch":       [(2000, 25), (3500, 18), (700, 28), (3000, 18), (1400, 25), (3800, 18), (500, 40), (2800, 25)],
+    "Energy drain": _sweep(3000, 400, 500, 24),
+    "Recharge":     _sweep(400, 3000, 500, 24),
+    "Overload":     _sweep(1000, 3800, 300, 16) + _sweep(3800, 1000, 90, 6),
+    "Meltdown":     _sweep(2400, 200, 600, 28),
+    "Countdown":    [(1000, 150), (0, 250), (1000, 150), (0, 250), (1000, 150), (0, 250), (2000, 400)],
+    "Launch":       _sweep(400, 3200, 400, 22),
+    "Thruster":     _sweep(300, 600, 300, 10) + _sweep(600, 300, 300, 10),
+    "Boost":        _sweep(800, 2600, 150, 10),
+    "Brake":        _sweep(2600, 500, 200, 12),
+    "Skid":         [(2000, 40), (1800, 40), (2000, 40), (1700, 40), (1900, 90)],
+    "Teleport in":  _sweep(3600, 800, 200, 14),
+    "Teleport out": _sweep(800, 3600, 200, 14),
+    "Magic":        _sweep(1568, 3136, 120, 7) + [(3520, 120)],
+    "Sparkle up":   [(2637, 30), (3136, 30), (2794, 30), (3520, 30), (3136, 30), (3951, 90)],
+    "Curse":        _sweep(1400, 500, 300, 14),
+    "Crit hit":     [(3500, 40), (0, 30), (3800, 130)],
+    "Heartbeat":    [(160, 90), (0, 60), (150, 70), (0, 400), (160, 90), (0, 60), (150, 70)],
+    "Zipper":       [(1500, 20), (1800, 20), (2100, 20), (2400, 20), (2700, 20), (3000, 20), (3300, 45)],
+    "Jackpot":      [(1568, 40), (2093, 40), (2637, 40), (3136, 40), (2637, 40), (3136, 40), (3520, 40), (3951, 130)],
+    "Victory":      [(784, 100), (1047, 100), (1319, 100), (1568, 320)],
+    "Defeat":       _sweep(1200, 300, 400, 18),
+}
+
 # -- the catalog (RTTTL strings + raw effects) ------------------------------
 SECTIONS: "Dict[str, Dict[str, Entry]]" = {
     "R2-D2": dict(_R2D2),
     "Game SFX": dict(_GAME_FX),
     "Arcade FX": dict(_ARCADE_FX),
+    "Sci-Fi FX": dict(_SCIFI_FX),
     "Video games": {
         "Super Mario": "smb:d=4,o=5,b=125:a,8f.,16c,16d,16f,16p,f,16d,16c,16p,16f,16p,16f,16p,8c6,8a.,g,16c,a,8f.,16c,16d,16f,16p,f,16d,16c,16p,16f,16p,16a#,16a,16g,2f",
         "Mario underworld": "SMBunderground:d=16,o=6,b=100:c,c5,a5,a,a#5,a#,2p,8p,c,c5,a5,a,a#5,a#,2p,8p,f5,f,d5,d,d#5,d#,2p,8p,f5,f,d5,d,d#5,d#,2p,32d#,d,32c#,c,p,d#,p,d,p,g#5,p,g5,p,c#,p,32c,f#,32f,32e,a#,32a,g#,32p,d#,b5,32p,a#5,32p,a5,g#5",
@@ -312,20 +348,47 @@ def harmonize(tones: Tune, steps: int = 2, floor_hz: int = 330) -> DuetTune:
     return pairs
 
 
-def harmonize_named(name: str, steps: int = 2) -> "Optional[DuetTune]":
+def harmonize_fixed(tones: Tune, semitones: int = -7, floor_hz: int = 300) -> DuetTune:
+    """2nd voice a FIXED interval away (default a perfect fifth below) — key-agnostic,
+    for sound EFFECTS that aren't in a key. Octave-floored to stay audible."""
+    ratio = 2 ** (semitones / 12.0)
+    out: DuetTune = []
+    for f, ms in tones:
+        if f <= 0:
+            out.append((0, 0, ms))
+            continue
+        hf = f * ratio
+        while hf < floor_hz:
+            hf *= 2
+        out.append((int(f), int(hf), ms))
+    return out
+
+
+def harmonize_named(name: str, mode: str = "thirds") -> "Optional[DuetTune]":
     base = find(name)
-    return harmonize(base, steps) if base else None
+    if base is None:
+        return None
+    if mode == "fifths":
+        return harmonize_fixed(base, -7)
+    if mode == "octave":
+        return harmonize_fixed(base, -12)
+    return harmonize(base)   # diatonic thirds (melodies)
 
 
 # Harmony sections = existing tunes auto-harmonized for the 2nd piezo.
-HARMONY_SECTIONS: "Dict[str, List[str]]" = {
-    "Movies & TV ♫": list(SECTIONS["Movies & TV"].keys()),
+# Value = (mode, [names]). Melodies -> diatonic thirds; effects -> parallel fifths.
+HARMONY_SECTIONS = {
+    "Movies & TV ♫": ("thirds", list(SECTIONS["Movies & TV"].keys())),
+    "Game SFX ♫":    ("fifths", list(SECTIONS["Game SFX"].keys())),
+    "Arcade FX ♫":   ("fifths", list(SECTIONS["Arcade FX"].keys())),
+    "Sci-Fi FX ♫":   ("fifths", list(SECTIONS["Sci-Fi FX"].keys())),
 }
 
 
 def catalog() -> "Dict[str, dict]":
-    """Sections -> {tunes:[names], duet:bool} for building the UI."""
-    out = {s: {"tunes": list(t.keys()), "duet": False} for s, t in SECTIONS.items()}
-    for s, names in HARMONY_SECTIONS.items():
-        out[s] = {"tunes": list(names), "duet": True}
+    """Sections -> {tunes:[names], duet:bool, harmony:mode} for the UI."""
+    out = {s: {"tunes": list(t.keys()), "duet": False, "harmony": None}
+           for s, t in SECTIONS.items()}
+    for s, (mode, names) in HARMONY_SECTIONS.items():
+        out[s] = {"tunes": list(names), "duet": True, "harmony": mode}
     return out

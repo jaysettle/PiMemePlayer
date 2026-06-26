@@ -606,7 +606,7 @@ def create_app(
         name = body.get("name")
         if name:
             if body.get("duet"):
-                pairs = beeps.harmonize_named(str(name))
+                pairs = beeps.harmonize_named(str(name), str(body.get("harmony", "thirds")))
                 if pairs is None:
                     return jsonify(ok=False, error="unknown beep '%s'" % name), 404
                 piezo2 = getattr(inputs, "piezo2", None)
