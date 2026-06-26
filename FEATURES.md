@@ -7,9 +7,18 @@ passwords live in settings/NetworkManager on the Pi, never in the repo.)
 
 ## 1. Battery voltage monitoring (PiSugar S → external ADC)
 
-**Why:** The PiSugar **S exposes no battery data to software** (per PiSugar docs —
-no I²C fuel gauge; pisugar-server does nothing on the S). We want to benchmark
-runtime, watch the battery drain in the flight recorder, and find resources to cut.
+**Why:** The PiSugar **S exposes no battery data to software** — VENDOR-CONFIRMED on
+the product page: *"does not support I2C communication... PiSugar S series does not
+support power inquiry."* It is **NOT** a PiSugar 2 inside (an AI claimed that; wrong —
+verified on the hardware: no SDA pogo spring on pin 3, no trace). The S only taps
+**SCL (pin 5)** for hardware auto-boot, never SDA. So an external ADC is the only way
+to a battery %. We want this to benchmark runtime + watch drain in the flight recorder.
+
+**Status update (I²C is now enabled):** `dtparam=i2c_arm=on` is set and `i2c-tools`
+installed on the Pi — ready for the ADS1115. ⚠️ The PiSugar S uses **GPIO3 (SCL) for
+auto-boot, which conflicts with I²C** — flip the PiSugar's dedicated switch to DISABLE
+auto-boot before putting the ADS1115 on the bus, or the two will fight over SCL.
+Interim zero-hardware safety: `vcgencmd get_throttled` under-voltage → clean shutdown.
 
 **Hardware (ordered — Comidox ADS1115, Amazon B07KW2QZS2):**
 - ADS1115 (16-bit I²C ADC) powered at **3.3 V**.
