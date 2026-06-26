@@ -161,10 +161,11 @@ class _Piezo:
         self.play_tones(seq)
 
 
-def play_duet(p1, p2, pairs) -> None:
+def play_duet(p1, p2, pairs, duty1: float = 0.5, duty2: float = 0.28) -> None:
     """Play [(melody_hz, harmony_hz, ms), ...] on two piezos at once, in lockstep
-    (single thread). Cancels any sequence already running on either piezo. If the
-    second piezo isn't wired, just plays the melody on the first."""
+    (single thread). The harmony (p2) plays at a LOWER duty cycle so it sits under
+    the melody instead of competing — keeps the duet clear, not droning. Cancels any
+    sequence already running on either piezo; melody-only if p2 isn't wired."""
     if p1 is None or getattr(p1, "_pwm", None) is None:
         return
     has2 = p2 is not None and getattr(p2, "_pwm", None) is not None
@@ -181,9 +182,9 @@ def play_duet(p1, p2, pairs) -> None:
             for f1, f2, ms in pairs:
                 if stop.is_set():
                     return
-                p1._set(f1, 0.5)
+                p1._set(f1, duty1)
                 if has2:
-                    p2._set(f2, 0.5)
+                    p2._set(f2, duty2)
                 time.sleep(max(0, ms) / 1000.0)
         finally:
             if not stop.is_set():
