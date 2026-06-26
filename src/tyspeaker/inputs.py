@@ -161,6 +161,39 @@ class _Piezo:
         self.play_tones(seq)
 
 
+def play_duet(p1, p2, pairs) -> None:
+    """Play [(melody_hz, harmony_hz, ms), ...] on two piezos at once, in lockstep
+    (single thread). Cancels any sequence already running on either piezo. If the
+    second piezo isn't wired, just plays the melody on the first."""
+    if p1 is None or getattr(p1, "_pwm", None) is None:
+        return
+    has2 = p2 is not None and getattr(p2, "_pwm", None) is not None
+    stop = threading.Event()
+    for p in (p1, p2 if has2 else None):
+        if p is not None:
+            with p._lock:
+                if p._cur_stop is not None:
+                    p._cur_stop.set()
+                p._cur_stop = stop
+
+    def _run() -> None:
+        try:
+            for f1, f2, ms in pairs:
+                if stop.is_set():
+                    return
+                p1._set(f1, 0.5)
+                if has2:
+                    p2._set(f2, 0.5)
+                time.sleep(max(0, ms) / 1000.0)
+        finally:
+            if not stop.is_set():
+                p1._set(0, 0)
+                if has2:
+                    p2._set(0, 0)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 # Volume feedback: map the volume level (0..100) to a piezo pitch so the kid
 # *hears* where the volume is — low pitch = quiet, high pitch = loud. Log-spaced
 # so the steps sound evenly spread; at the ends the pitch simply repeats the
@@ -277,6 +310,7 @@ class Inputs:
         self.encoder = None
         self.button = None
         self.piezo: Optional[_Piezo] = None
+        self.piezo2: Optional[_Piezo] = None
         self.active = False
         self.gpio_available = False
         self.encoder_clk = -1
@@ -418,6 +452,9 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
 
     piezo = _Piezo(settings.get("piezo_pin", -1), settings.get("piezo_freq", 2000))
     handles.piezo = piezo
+    # Second piezo (GPIO18 = PWM channel 0) for two-voice harmony, if wired.
+    piezo2 = _Piezo(settings.get("piezo2_pin", -1), settings.get("piezo_freq", 2000))
+    handles.piezo2 = piezo2
 
     # -- rotary encoder -----------------------------------------------------
     clk, dt = settings.get("encoder_clk", -1), settings.get("encoder_dt", -1)

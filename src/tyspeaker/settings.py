@@ -25,7 +25,8 @@ DEFAULTS: Dict[str, Any] = {
     "encoder_clk": -1,           # rotary encoder pin A
     "encoder_dt": -1,            # rotary encoder pin B
     "encoder_sw": -1,            # encoder's push switch (if separate)
-    "piezo_pin": -1,             # piezo buzzer for feedback
+    "piezo_pin": -1,             # piezo buzzer for feedback (PWM ch1 / GPIO19)
+    "piezo2_pin": 18,            # 2nd piezo for harmony (PWM ch0 / GPIO18); -1 = none
     "piezo_freq": 2000,          # system tone (Hz) for all the cue beeps
     # input behaviour
     "double_click_ms": 350,
@@ -44,7 +45,7 @@ DEFAULTS: Dict[str, Any] = {
 
 # Settings that only take effect after a service restart (GPIO devices).
 RESTART_REQUIRED = {
-    "encoder_clk", "encoder_dt", "encoder_sw", "piezo_pin",
+    "encoder_clk", "encoder_dt", "encoder_sw", "piezo_pin", "piezo2_pin",
     "double_click_ms", "long_press_ms", "button_bounce_ms",
     "encoder_bounce_ms",
 }

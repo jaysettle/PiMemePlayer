@@ -18,7 +18,7 @@ from . import beeps
 from . import hotspot
 from .gps import GpsReader
 from .gps_stats import GpsStats
-from .inputs import start_inputs
+from .inputs import play_duet, start_inputs
 from .library import Library
 from .logsetup import configure_logging, get_logger, recent_logs
 from .power import power_status
@@ -605,6 +605,14 @@ def create_app(
             return jsonify(ok=True, wired=wired, droid=True)
         name = body.get("name")
         if name:
+            if body.get("duet"):
+                pairs = beeps.harmonize_named(str(name))
+                if pairs is None:
+                    return jsonify(ok=False, error="unknown beep '%s'" % name), 404
+                piezo2 = getattr(inputs, "piezo2", None)
+                play_duet(piezo, piezo2, pairs)
+                return jsonify(ok=True, wired=wired, name=name, duet=True,
+                               piezo2=getattr(piezo2, "_pwm", None) is not None)
             tune = beeps.find(str(name))
             if tune is None:
                 return jsonify(ok=False, error="unknown beep '%s'" % name), 404

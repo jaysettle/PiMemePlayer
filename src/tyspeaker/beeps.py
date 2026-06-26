@@ -12,6 +12,7 @@ melody's range — they stay recognizable by rhythm + relative pitch on one buzz
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -229,14 +230,102 @@ SECTIONS: "Dict[str, Dict[str, Entry]]" = {
 }
 
 
-def catalog() -> "Dict[str, List[str]]":
-    """Sections -> tune names (for building the UI; no tone data)."""
-    return {section: list(tunes.keys()) for section, tunes in SECTIONS.items()}
-
-
 def find(name: str) -> "Optional[Tune]":
     for tunes in SECTIONS.values():
         if name in tunes:
             v = tunes[name]
             return parse_rtttl(v) if isinstance(v, str) else list(v)
     return None
+
+
+# -- two-piezo harmony (diatonic thirds) ------------------------------------
+# Krumhansl-Schmuckler key-profile weights (major / natural-minor).
+_KS_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
+_KS_MINOR = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
+_MAJOR = [0, 2, 4, 5, 7, 9, 11]
+_MINOR = [0, 2, 3, 5, 7, 8, 10]
+DuetTune = List[Tuple[int, int, int]]   # [(melody_hz, harmony_hz, ms), ...]
+
+
+def _f2m(f: int) -> int:
+    return int(round(69 + 12 * math.log2(f / 440.0)))
+
+
+def _m2f(n: int) -> int:
+    return int(round(440.0 * 2 ** ((n - 69) / 12.0)))
+
+
+def _corr(a, b) -> float:
+    n = len(a)
+    ma, mb = sum(a) / n, sum(b) / n
+    num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
+    da = math.sqrt(sum((x - ma) ** 2 for x in a))
+    db = math.sqrt(sum((x - mb) ** 2 for x in b))
+    return num / (da * db) if da and db else 0.0
+
+
+def detect_key(tones: Tune):
+    """(root_pitch_class, scale, mode) via Krumhansl-Schmuckler key-finding."""
+    hist = [0.0] * 12
+    for f, ms in tones:
+        if f > 0:
+            hist[_f2m(f) % 12] += ms
+    if sum(hist) == 0:
+        return 0, _MAJOR, "major"
+    best = None
+    for root in range(12):
+        rot = [hist[(root + i) % 12] for i in range(12)]
+        for prof, scale, mode in ((_KS_MAJOR, _MAJOR, "major"), (_KS_MINOR, _MINOR, "minor")):
+            score = _corr(rot, prof)
+            if best is None or score > best[0]:
+                best = (score, root, scale, mode)
+    return best[1], best[2], best[3]
+
+
+def _scale_notes(root: int, scale, lo: int = 33, hi: int = 96) -> List[int]:
+    out = []
+    for octv in range(0, 11):
+        for s in scale:
+            n = root + s + 12 * octv
+            if lo <= n <= hi:
+                out.append(n)
+    return sorted(set(out))
+
+
+def harmonize(tones: Tune, steps: int = 2, floor_hz: int = 330) -> DuetTune:
+    """Melody -> [(melody_hz, harmony_hz, ms)]: a DIATONIC third (steps=2) below
+    each note, snapped to the auto-detected key. The harmony is octave-floored so
+    low notes stay audible on the piezo (a third floored up = a consonant sixth)."""
+    root, scale, _mode = detect_key(tones)
+    sn = _scale_notes(root, scale)
+    pairs: DuetTune = []
+    for f, ms in tones:
+        if f <= 0:
+            pairs.append((0, 0, ms))
+            continue
+        m = _f2m(f)
+        idx = min(range(len(sn)), key=lambda i: abs(sn[i] - m))
+        hf = _m2f(sn[max(0, idx - steps)])
+        while hf < floor_hz:
+            hf *= 2
+        pairs.append((int(f), int(hf), ms))
+    return pairs
+
+
+def harmonize_named(name: str, steps: int = 2) -> "Optional[DuetTune]":
+    base = find(name)
+    return harmonize(base, steps) if base else None
+
+
+# Harmony sections = existing tunes auto-harmonized for the 2nd piezo.
+HARMONY_SECTIONS: "Dict[str, List[str]]" = {
+    "Movies & TV ♫": list(SECTIONS["Movies & TV"].keys()),
+}
+
+
+def catalog() -> "Dict[str, dict]":
+    """Sections -> {tunes:[names], duet:bool} for building the UI."""
+    out = {s: {"tunes": list(t.keys()), "duet": False} for s, t in SECTIONS.items()}
+    for s, names in HARMONY_SECTIONS.items():
+        out[s] = {"tunes": list(names), "duet": True}
+    return out

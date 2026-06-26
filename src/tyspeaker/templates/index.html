@@ -1407,17 +1407,27 @@
     }
     function renderBeepSection(name){
       const wrap = $("beepButtons"); if(!wrap || !_beepsData) return;
+      const sec = _beepsData[name]; if(!sec) return;
       wrap.innerHTML = "";
-      (_beepsData[name] || []).forEach(n => {
+      if(sec.duet){
+        const note = document.createElement("div");
+        note.className = "mini"; note.style.width = "100%";
+        note.innerHTML = "🎶 Two-piezo harmony — melody on piezo&nbsp;1, a diatonic third on piezo&nbsp;2.";
+        wrap.appendChild(note);
+      }
+      (sec.tunes || []).forEach(n => {
         const b = document.createElement("button");
-        b.className = "ghost"; b.type = "button"; b.textContent = n;
-        b.onclick = () => playBeep(n);
+        b.className = sec.duet ? "primary" : "ghost"; b.type = "button"; b.textContent = n;
+        b.onclick = () => playBeep(n, sec.duet);
         wrap.appendChild(b);
       });
     }
-    async function playBeep(name){
-      try{ const r = await api("/api/diagnostics/beep", {name}); if(!r.wired) toast("No buzzer wired on the pin"); }
-      catch(e){ toast(e.message || "beep failed"); }
+    async function playBeep(name, duet){
+      try{
+        const r = await api("/api/diagnostics/beep", duet ? {name, duet:true} : {name});
+        if(!r.wired) toast("No buzzer wired on the pin");
+        else if(duet && r.piezo2 === false) toast("Melody only — 2nd piezo (GPIO18) not detected");
+      }catch(e){ toast(e.message || "beep failed"); }
     }
     let _logTimer = null;
     async function loadLogs(){
