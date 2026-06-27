@@ -18,7 +18,7 @@ from . import beeps
 from . import hotspot
 from .gps import GpsReader
 from .gps_stats import GpsStats
-from .inputs import ACTION_LABELS, DEFAULT_ACTIONS, play_duet, start_inputs
+from .inputs import ACTION_LABELS, DEFAULT_ACTIONS, SOUND_EVENTS, play_duet, start_inputs
 from .library import Library
 from .logsetup import configure_logging, get_logger, recent_logs
 from .power import power_status
@@ -593,7 +593,8 @@ def create_app(
     def api_beeps():
         return jsonify(sections=beeps.catalog(), harmony_modes=beeps.harmony_modes(),
                        piezo_volume=cfg.get("piezo_volume", 100),
-                       gesture_sounds=cfg.get("gesture_sounds", {}))
+                       gesture_sounds=cfg.get("gesture_sounds", {}),
+                       sound_events=SOUND_EVENTS)
 
     @app.get("/api/actions")
     def api_actions():
@@ -623,7 +624,7 @@ def create_app(
     def api_gesture_sounds():
         body = _body()
         gesture = str(body.get("gesture", ""))
-        if gesture not in ("tap", "double", "triple", "quad", "hold"):
+        if gesture not in ({"tap", "double", "triple", "quad", "hold"} | set(SOUND_EVENTS)):
             return jsonify(ok=False, error="bad gesture"), 400
         gs = dict(cfg.get("gesture_sounds") or {})
         name = str(body.get("name", "")).strip()

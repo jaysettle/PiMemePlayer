@@ -1417,7 +1417,7 @@
         toast("System tone set to " + r.freq + " Hz" + (r.hardware ? " (hardware PWM)" : " (software PWM)"));
       }catch(e){ toast(e.message); }
     }
-    let _beepsData = null, _harmonyModes = [], _selSound = null, _gestureSounds = {};
+    let _beepsData = null, _harmonyModes = [], _selSound = null, _gestureSounds = {}, _soundEvents = {};
     const _GESTURES = {tap:"Tap", double:"Double-tap", triple:"Triple-tap", quad:"Quad-tap", hold:"Hold"};
     function selectSound(s){
       _selSound = s;
@@ -1427,22 +1427,30 @@
     function renderGestureAssign(){
       const wrap = $("gestureAssign"); if(!wrap) return;
       wrap.innerHTML = "";
-      Object.keys(_GESTURES).forEach(g => {
-        const a = _gestureSounds[g];
+      const add = (key, label) => {
+        const a = _gestureSounds[key];
         const b = document.createElement("button");
         b.className = a ? "primary" : "ghost"; b.type = "button";
-        b.textContent = _GESTURES[g] + ": " + (a ? (a.name + (a.duet ? " ♫" : "")) : "default");
-        b.onclick = () => assignGesture(g);
+        b.textContent = label + ": " + (a ? (a.name + (a.duet ? " ♫" : "")) : "default");
+        b.onclick = () => assignGesture(key, label);
         wrap.appendChild(b);
-      });
+      };
+      Object.keys(_GESTURES).forEach(g => add(g, _GESTURES[g]));
+      if(Object.keys(_soundEvents).length){
+        const sep = document.createElement("div");
+        sep.className = "mini"; sep.style.width = "100%"; sep.style.marginTop = "6px";
+        sep.textContent = "State events (on/off beeps for GPS & hotspot):";
+        wrap.appendChild(sep);
+        Object.keys(_soundEvents).forEach(e => add(e, _soundEvents[e]));
+      }
     }
-    async function assignGesture(g){
+    async function assignGesture(key, label){
       const s = _selSound;
       try{
         const r = await api("/api/gesture_sounds",
-          s ? {gesture:g, name:s.name, duet:!!s.duet, harmony:s.harmony||"3rd above"} : {gesture:g, name:""});
+          s ? {gesture:key, name:s.name, duet:!!s.duet, harmony:s.harmony||"3rd above"} : {gesture:key, name:""});
         _gestureSounds = r.gesture_sounds || {};
-        toast(_GESTURES[g] + " → " + (s ? s.name : "default"));
+        toast((label||key) + " → " + (s ? s.name : "default"));
         renderGestureAssign();
       }catch(e){ toast(e.message || "assign failed"); }
     }
@@ -1476,6 +1484,7 @@
       const pv = $("piezoVol");
       if(pv && d.piezo_volume != null){ pv.value = d.piezo_volume; $("piezoVolLbl").textContent = d.piezo_volume; }
       _gestureSounds = d.gesture_sounds || {};
+      _soundEvents = d.sound_events || {};
       renderGestureAssign();
       const sel = $("beepSection");
       sel.innerHTML = "";

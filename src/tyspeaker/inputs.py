@@ -247,14 +247,19 @@ ACTION_LABELS = {
     "shuffle":    "Toggle shuffle",
     "gps_start":  "Start GPS logging",
     "gps_stop":   "Stop GPS logging",
+    "gps_toggle": "Toggle GPS logging",
     "gps_auto":   "GPS logging: auto",
     "hotspot":    "Toggle Wi-Fi hotspot",
     "droid":      "Droid chatter",
     "reboot":     "Reboot the Pi",
 }
 # Default action per gesture (reproduces the original hard-wired behaviour).
-DEFAULT_ACTIONS = {"tap": "play", "double": "random", "triple": "gps_start",
+DEFAULT_ACTIONS = {"tap": "play", "double": "random", "triple": "gps_toggle",
                    "quad": "hotspot", "hold": "advance"}
+# Toggle actions emit a STATE EVENT so the cue can differ on vs off. These are also
+# assignable sound targets (set in the beep playground), alongside the gestures.
+SOUND_EVENTS = {"gps_on": "GPS on", "gps_off": "GPS off",
+                "hotspot_on": "Hotspot on", "hotspot_off": "Hotspot off"}
 
 
 class _ClickHandler:
@@ -548,24 +553,22 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
                 hold_time=settings.get("long_press_ms", 700) / 1000,
             )
 
-            def _gesture_cue(gesture, default_fn) -> None:
-                # Play the beep-playground sound assigned to this gesture (a duet if
-                # configured); else the built-in default R2 cue. Read live from
-                # settings so assignments take effect without a restart.
-                asn = (settings.get("gesture_sounds") or {}).get(gesture)
+            def _play_assigned(asn) -> bool:
+                # Play a sound assignment {name,duet,harmony}; True if it played.
                 name = asn.get("name") if isinstance(asn, dict) else None
-                if name:
-                    from . import beeps
-                    if asn.get("duet"):
-                        pairs = beeps.harmonize_named(name, asn.get("harmony") or "3rd above")
-                        if pairs:
-                            play_duet(piezo, piezo2, pairs)
-                            return
-                    tune = beeps.find(name)
-                    if tune:
-                        piezo.play_tones(tune)
-                        return
-                default_fn()
+                if not name:
+                    return False
+                from . import beeps
+                if asn.get("duet"):
+                    pairs = beeps.harmonize_named(name, asn.get("harmony") or "3rd above")
+                    if pairs:
+                        play_duet(piezo, piezo2, pairs)
+                        return True
+                tune = beeps.find(name)
+                if tune:
+                    piezo.play_tones(tune)
+                    return True
+                return False
 
             def _piezo_vol(delta) -> None:
                 v = max(0, min(100, int(round(piezo.volume * 100)) + delta))
@@ -577,9 +580,25 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
                 cur = settings.get("mode", "sequential")
                 settings.update({"mode": "random" if cur == "sequential" else "sequential"})
 
-            def _hotspot() -> None:
+            def _hotspot():
                 from . import hotspot
+                going_on = hotspot.status() != "on"
                 hotspot.toggle()
+                return "hotspot_on" if going_on else "hotspot_off"
+
+            def _gps_set(mode, event):
+                if gps:
+                    gps.set_override(mode)
+                return event
+
+            def _gps_toggle():
+                if not gps:
+                    return None
+                if gps.log_override == "on":
+                    gps.set_override("off")
+                    return "gps_off"
+                gps.set_override("on")
+                return "gps_on"
 
             def _reboot() -> None:
                 import subprocess
@@ -603,9 +622,10 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
                 "piezo_up": lambda: _piezo_vol(+10),
                 "piezo_down": lambda: _piezo_vol(-10),
                 "shuffle": _toggle_shuffle,
-                "gps_start": lambda: gps.set_override("on") if gps else None,
-                "gps_stop": lambda: gps.set_override("off") if gps else None,
-                "gps_auto": lambda: gps.set_override("auto") if gps else None,
+                "gps_start": lambda: _gps_set("on", "gps_on"),
+                "gps_stop": lambda: _gps_set("off", "gps_off"),
+                "gps_auto": lambda: _gps_set("auto", None),
+                "gps_toggle": _gps_toggle,
                 "hotspot": _hotspot,
                 "droid": piezo.droid,
                 "reboot": _reboot,
@@ -617,18 +637,35 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
                 "quad": lambda: piezo.play_tones(R2_HOTSPOT_ON),
                 "hold": piezo.droid,
             }
+            # state-aware default cues for toggle events (rising = on, falling = off)
+            _EVENT_DEFAULT_CUE = {
+                "gps_on": lambda: piezo.play_tones(R2_HOTSPOT_ON),
+                "gps_off": lambda: piezo.play_tones(R2_HOTSPOT_OFF),
+                "hotspot_on": lambda: piezo.play_tones(R2_HOTSPOT_ON),
+                "hotspot_off": lambda: piezo.play_tones(R2_HOTSPOT_OFF),
+            }
 
             def _run(gesture) -> None:
-                # Run the gesture's assigned ACTION (or its default), then play its
-                # assigned SOUND (or default cue). Both read live from settings.
+                # Run the gesture's action (default if unset); toggle actions return a
+                # state event. Then play a sound — priority: event sound > gesture
+                # sound > event default cue > gesture default cue. All read live.
                 aid = (settings.get("gesture_actions") or {}).get(gesture) or DEFAULT_ACTIONS[gesture]
+                event = None
                 fn = ACTIONS.get(aid)
                 if fn:
                     try:
-                        fn()
+                        event = fn()
                     except Exception as exc:
                         log.debug("gesture %s action %s failed: %s", gesture, aid, exc)
-                _gesture_cue(gesture, _DEFAULT_CUE.get(gesture, lambda: None))
+                sounds = settings.get("gesture_sounds") or {}
+                if event and _play_assigned(sounds.get(event)):
+                    return
+                if _play_assigned(sounds.get(gesture)):
+                    return
+                if event and event in _EVENT_DEFAULT_CUE:
+                    _EVENT_DEFAULT_CUE[event]()
+                    return
+                _DEFAULT_CUE.get(gesture, lambda: None)()
 
             _ClickHandler(
                 settings,
