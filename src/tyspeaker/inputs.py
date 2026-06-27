@@ -255,7 +255,7 @@ ACTION_LABELS = {
 }
 # Default action per gesture (reproduces the original hard-wired behaviour).
 DEFAULT_ACTIONS = {"tap": "play", "double": "random", "triple": "gps_toggle",
-                   "quad": "hotspot", "hold": "advance"}
+                   "quad": "hotspot", "quint": "reboot", "hold": "advance"}
 # Toggle actions emit a STATE EVENT so the cue can differ on vs off. These are also
 # assignable sound targets (set in the beep playground), alongside the gestures.
 SOUND_EVENTS = {"gps_on": "GPS on", "gps_off": "GPS off",
@@ -274,6 +274,7 @@ class _ClickHandler:
         diagnostics: "Inputs",
         on_triple=None,
         on_quad=None,
+        on_quint=None,
     ) -> None:
         self._double_s = settings.get("double_click_ms", 350) / 1000
         self._on_short = on_short
@@ -281,6 +282,7 @@ class _ClickHandler:
         self._on_long = on_long
         self._on_triple = on_triple
         self._on_quad = on_quad
+        self._on_quint = on_quint
         self._diagnostics = diagnostics
         self._held = False
         self._count = 0
@@ -321,7 +323,10 @@ class _ClickHandler:
         n = self._count
         self._count = 0
         self._timer = None
-        if self._on_quad is not None and n >= 4:
+        if self._on_quint is not None and n >= 5:
+            self._diagnostics.note_button("quint")
+            self._safe(self._on_quint)
+        elif self._on_quad is not None and n == 4:
             self._diagnostics.note_button("quad")
             self._safe(self._on_quad)
         elif self._on_triple is not None and n == 3:
@@ -370,6 +375,7 @@ class Inputs:
             "double": 0,
             "triple": 0,
             "quad": 0,
+            "quint": 0,
         }
         self._last_encoder_direction = ""
         self._last_button_event = ""
@@ -635,6 +641,7 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
                 "double": lambda: piezo.play_tones(R2_RANDOM),
                 "triple": lambda: piezo.play_tones(R2_LOG),
                 "quad": lambda: piezo.play_tones(R2_HOTSPOT_ON),
+                "quint": lambda: piezo.play_tones(R2_HOTSPOT_OFF),
                 "hold": piezo.droid,
             }
             # state-aware default cues for toggle events (rising = on, falling = off)
@@ -674,6 +681,7 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
                 settings,
                 lambda: _run("tap"), lambda: _run("double"), lambda: _run("hold"),
                 handles, on_triple=lambda: _run("triple"), on_quad=lambda: _run("quad"),
+                on_quint=lambda: _run("quint"),
             ).attach(btn)
             handles.button = btn
         except Exception as exc:

@@ -610,7 +610,7 @@ def create_app(
     def api_gesture_actions():
         body = _body()
         gesture = str(body.get("gesture", ""))
-        if gesture not in ("tap", "double", "triple", "quad", "hold"):
+        if gesture not in ("tap", "double", "triple", "quad", "quint", "hold"):
             return jsonify(ok=False, error="bad gesture"), 400
         action = str(body.get("action", ""))
         ga = dict(cfg.get("gesture_actions") or {})
@@ -625,7 +625,7 @@ def create_app(
     def api_gesture_sounds():
         body = _body()
         gesture = str(body.get("gesture", ""))
-        if gesture not in ({"tap", "double", "triple", "quad", "hold"} | set(SOUND_EVENTS)):
+        if gesture not in ({"tap", "double", "triple", "quad", "quint", "hold"} | set(SOUND_EVENTS)):
             return jsonify(ok=False, error="bad gesture"), 400
         gs = dict(cfg.get("gesture_sounds") or {})
         name = str(body.get("name", "")).strip()
