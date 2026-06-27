@@ -1,35 +1,66 @@
 # PiMemePlayer (TySpeaker)
 
-A push-button **meme / sound-board player** for a **Raspberry Pi Zero 2 W**, with a
-**LAN web UI** for uploading and organizing clips and a **rotary encoder + button**
-for hands-free play. Audio streams to a **Bluetooth speaker** over A2DP. Built to
-ride on a kid's scooter — so it boots and plays **with no network**.
+A push-button **meme / sound-board player** for a **Raspberry Pi Zero 2 W**, built to
+ride on a kid's scooter. A **rotary encoder + button** plays clips hands-free to a
+**Bluetooth speaker** (A2DP), a **LAN web UI** manages everything, and it boots and
+plays **with no network**. Beyond the soundboard it also does **GPS ride tracking**, a
+**two-piezo harmony engine / beep playground**, a fully **reassignable encoder**, and
+an on-demand **Wi-Fi hotspot** so a phone can connect mid-ride.
 
-Open on the LAN, no login. Three tabs:
+Open on the LAN, no login. Four tabs:
 
 1. **Ty Player** — drag-drop clips (mp3/wav/ogg/flac/m4a/aac/opus), reorder, play /
-   stop / next, **🔀 Shuffle** on/off, volume. Stored on the SD card.
-2. **Bluetooth** — scan / pair / connect / trust / auto-connect a speaker; live
-   connection status and logs.
-3. **Settings** — GPIO pins (encoder CLK/DT/SW + piezo), click timings, knob role,
-   player command, diagnostics (test beep, logs).
+   stop / next, **🔀 Shuffle**, volume. Stored on the SD card.
+2. **Bluetooth** — scan / pair / connect / trust / auto-connect a speaker; live status.
+3. **GPS** — per-ride tracks on a map (rides auto-split per day), miles / time / top
+   speed / odometer, a day & month browser, and a logging override.
+4. **Settings** — GPIO pins, click timings, **button actions**, the **🎵 beep
+   playground** (two-piezo harmonies + volume), diagnostics, GPS controls, and hotspot.
 
-## Physical controls (rotary encoder + piezo)
+## Physical controls (rotary encoder + 2 piezos)
 
-Knob role **select** (default):
-- **tap** → replay the current clip
-- **hold** → next clip (follows Shuffle: random when on, in-order when off)
-- **double-tap** → surprise (random clip)
-- **turn** → browse + audition clips
+The encoder button has five gestures, each with a **reassignable action** *and* an
+assignable **piezo sound** (both set in Settings). Defaults:
 
-Knob role **volume**:
-- **turn** → volume, 0–10 in 10% steps. The **piezo pitch maps to the level**
-  (low pitch = quiet → high pitch = loud); at min/max the pitch holds at the
-  boundary tone as an "end of range" cue.
+| Gesture | Default action |
+|---|---|
+| **tap** | play current clip |
+| **double-tap** | random clip |
+| **hold** | next clip (random if Shuffle) |
+| **triple-tap** | start GPS logging |
+| **quad-tap** | toggle the Wi-Fi hotspot |
+| **turn** | browse clips, or volume (knob role) — piezo pitch maps to the level |
 
-A **random clip plays automatically on boot and on every Bluetooth (re)connect** —
-the scooter "greets" you with a meme. The piezo is a *passive* buzzer driven by PWM
-at its resonant frequency (see `inputs.py`).
+**17 actions** are assignable per gesture (play / random / next / prev, speaker &
+piezo volume ±, shuffle, GPS start/stop/auto, hotspot, droid, reboot, none). A
+**random clip greets you on boot and every BT reconnect**. The piezos are *passive*
+buzzers on hardware PWM — **two of them**, enabling two-voice harmony.
+
+## GPS ride tracking
+
+A serial GPS (u-blox-7 @9600 on `/dev/ttyS0`) logs rides to the SD card. Logging is
+**network-driven**: it records whenever the Pi has been off the home Wi-Fi subnet for
+>10s (out riding, incl. on the hotspot) and stops after >20s back home; a **Force ON /
+OFF / Auto** override + a triple-tap force it on. A day **auto-splits into separate
+rides** (gap-based), each its own track with per-ride miles / time / top speed + a
+lifetime odometer. An always-on **flight recorder** logs fix quality every 30s, and the
+clock is set from GPS when offline (no NTP).
+
+## Beep playground + two-piezo harmony
+
+**Settings → 🎵 Beep playground**: ~250 tunes/effects — R2-D2 chirps, **Game / Arcade /
+Sci-Fi SFX**, retro-game & movie/TV **RTTTL** melodies, cartoons, 80s. With a second
+piezo wired (GPIO18), any tune plays as a **two-voice duet**: melodies harmonize in
+**diatonic thirds** (key auto-detected via Krumhansl-Schmuckler), effects in parallel
+fifths, with a **10-interval picker** (3rd/6th/10th, 4th/5th/octave, above or below).
+Piezo loudness is a duty-cycle **volume slider**, and any sound can be **bound to a
+button gesture**.
+
+## Wi-Fi hotspot (on-ride access)
+
+**Quad-tap** (or the GPS tab) toggles the Pi into an AP (`tyspeaker`) so a phone can
+join and reach the UI at `http://10.42.0.1:8000` mid-ride. It's a NetworkManager
+profile with `autoconnect=no`, so a reboot always reverts to home Wi-Fi.
 
 ## Audio: bluez-alsa (not PipeWire)
 
@@ -44,6 +75,20 @@ bluez-alsa removes PipeWire from the BT path entirely. **Full setup + rationale:
 - Daemon: `bluealsa --keep-alive=600 -p a2dp-source` (keep-alive stops the speaker
   idle-sleeping between clips).
 - Volume: the speaker's own AVRCP control via `amixer -D bluealsa`.
+
+## Hardware (pins, piezos, battery)
+
+- **2 passive piezos** on hardware PWM (`dtoverlay=pwm-2chan`): #1 = **GPIO19** (pin 35),
+  #2 = **GPIO18** (pin 12), each with a GND. Just signal + GND (passive, 2-wire).
+- **Encoder**: A=GPIO5, B=GPIO6, push=GPIO13. **GPS**: VCC pin 1, GND pin 6, TX→pin 10
+  (GPIO15). **I²C** enabled on GPIO2/3 for a future ADS1115 (`dtparam=i2c_arm=on`).
+- **PiSugar S 1200 mAh UPS**: ~**2h47m** runtime, but **no software battery readout or
+  low-battery warning** — it's *not* a PiSugar 2 inside (no SDA pogo; "does not support
+  I2C/power inquiry"); it regulates 5 V then dies instantly, so even `vcgencmd`
+  under-voltage never trips. An external **ADS1115** on I²C is the only path to a %.
+  ⚠️ The S uses GPIO3 (SCL) for auto-boot — disable that switch before using I²C.
+- ⚠️ The Zero 2 W shares **one 2.4 GHz antenna** for Wi-Fi + BT; heavy BT or a failing
+  speaker autoconnect can cause occasional Wi-Fi timeouts.
 
 ## Project layout
 
