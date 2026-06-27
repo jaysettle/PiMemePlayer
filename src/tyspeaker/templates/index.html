@@ -1469,10 +1469,26 @@
               + '<span class="mini">sound: '+(snd ? (snd.name+(snd.duet?" ♫":"")) : "default cue")+'</span>'
               + '</div>';
       });
+      const events = d.sound_events || {};
+      if(Object.keys(events).length){
+        html += '<div class="mini" style="margin-top:14px">State-event sounds — play when GPS / hotspot toggles on or off. Set the sound in the Beep playground; clear it here to restore the default rising/falling beep.</div>';
+        Object.keys(events).forEach(e => {
+          const snd = (d.gesture_sounds||{})[e];
+          html += '<div class="row" style="align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap">'
+                + '<b style="min-width:92px; color:var(--gold)">'+events[e]+'</b>'
+                + '<span class="mini" style="min-width:190px">sound: '+(snd ? (snd.name+(snd.duet?" ♫":"")) : "default beep")+'</span>'
+                + (snd ? '<button class="ghost" type="button" onclick="clearSound(\''+e+'\')">Clear</button>' : '')
+                + '</div>';
+        });
+      }
       wrap.innerHTML = html;
     }
     async function setAction(g, action){
       try{ await api("/api/gesture_actions", {gesture:g, action}); toast(_GESTURES[g] + " → " + action); }
+      catch(e){ toast(e.message || "failed"); }
+    }
+    async function clearSound(key){
+      try{ await api("/api/gesture_sounds", {gesture:key, name:""}); toast(key + " → default beep"); loadActions(); }
       catch(e){ toast(e.message || "failed"); }
     }
     async function loadBeeps(){

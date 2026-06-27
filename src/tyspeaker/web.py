@@ -603,6 +603,7 @@ def create_app(
             defaults=DEFAULT_ACTIONS,
             gesture_actions=cfg.get("gesture_actions", {}),
             gesture_sounds=cfg.get("gesture_sounds", {}),
+            sound_events=SOUND_EVENTS,
         )
 
     @app.post("/api/gesture_actions")
