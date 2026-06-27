@@ -654,7 +654,10 @@ def start_inputs(settings: Settings, engine: PlaybackEngine, gps=None) -> Inputs
                 fn = ACTIONS.get(aid)
                 if fn:
                     try:
-                        event = fn()
+                        ret = fn()
+                        # only toggle actions return a string event id; ignore other
+                        # return values (e.g. step_and_play returns a dict).
+                        event = ret if isinstance(ret, str) else None
                     except Exception as exc:
                         log.debug("gesture %s action %s failed: %s", gesture, aid, exc)
                 sounds = settings.get("gesture_sounds") or {}
