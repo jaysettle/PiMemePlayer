@@ -75,6 +75,11 @@
     .miniGallery img{height:76px; width:100%; border-radius:8px; object-fit:cover; border:1px solid var(--line)}
     nav .spacer{flex:1}
     nav .status{font-size:12px; color:var(--muted); padding:10px; border-top:1px solid var(--line)}
+    .hamburger{display:none; position:fixed; top:10px; left:10px; z-index:200;
+      width:44px; height:44px; border-radius:10px; border:1px solid var(--line);
+      background:var(--panel2); color:var(--fg); font-size:20px; cursor:pointer;
+      align-items:center; justify-content:center}
+    .nav-backdrop{display:none}
 
     main{flex:1; overflow:auto; padding:24px; max-width:1180px}
     h1,h2,h3{margin:0; line-height:1.1; letter-spacing:0}
@@ -137,12 +142,12 @@
     .drop strong{color:var(--fg); font-size:17px}
     .drop.hover{border-color:var(--accent); color:var(--fg)}
     ul.list{list-style:none; margin:0; padding:0}
-    .item{display:flex; align-items:center; gap:10px; padding:10px 12px; margin-top:8px}
+    .item{display:flex; align-items:center; gap:10px; padding:10px 12px; margin-top:8px; flex-wrap:wrap}
     .item.drag{opacity:.45}
     .item.sel{border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 35%,transparent)}
     .handle{cursor:grab; color:var(--muted); font-weight:900}
     .idx{width:26px; text-align:center; color:var(--muted); font-variant-numeric:tabular-nums}
-    .nm{flex:1; min-width:0; word-break:break-word; font-weight:800}
+    .nm{flex:1 1 150px; min-width:130px; word-break:break-word; font-weight:800}
     .nm .meta{color:var(--muted); font-size:12px; margin-left:8px; font-weight:700}
     .empty{color:var(--muted); padding:20px; text-align:center}
     .badges{display:flex; gap:6px; flex-wrap:wrap}
@@ -222,10 +227,17 @@
 
     @media (max-width:850px){
       body{display:block}
-      nav{width:auto; border-right:none; border-bottom:1px solid var(--line)}
-      .logo{width:190px; margin-left:0}
+      .hamburger{display:flex}
+      nav{position:fixed; top:0; left:0; bottom:0; width:240px; z-index:150;
+        transform:translateX(-100%); transition:transform .25s ease; overflow-y:auto;
+        border-right:1px solid var(--line); border-bottom:none}
+      body.nav-open nav{transform:none; box-shadow:0 0 30px rgba(0,0,0,.55)}
+      .nav-backdrop{display:block; position:fixed; inset:0; background:rgba(0,0,0,.45);
+        z-index:140; opacity:0; pointer-events:none; transition:opacity .25s}
+      body.nav-open .nav-backdrop{opacity:1; pointer-events:auto}
+      .logo{width:190px; margin:36px auto 8px}
       .miniGallery{display:none}
-      main{padding:18px}
+      main{padding:62px 18px 18px}
       .titleRow,.mediaBand,.transportGrid,.wireGrid{display:block}
       .titleArt{margin-top:10px}
       .transportActions{justify-content:flex-start; margin-top:14px}
@@ -236,6 +248,8 @@
   </style>
 </head>
 <body data-theme="neon">
+  <button class="hamburger" onclick="toggleNav()" aria-label="Menu" type="button">☰</button>
+  <div class="nav-backdrop" onclick="toggleNav(false)"></div>
   <nav>
     <img class="logo" src="/static/tyspeaker-logo.svg" alt="TySpeaker logo">
     <button class="tab active" data-tab="player" type="button"><span class="tabIcon">P</span> Ty Player</button>
@@ -819,7 +833,14 @@
         stopInputDiagnostics();
       }
     }
-    document.querySelectorAll(".tab").forEach(t => t.onclick = () => showTab(t.dataset.tab));
+    function toggleNav(force){
+      const open = (force === undefined) ? !document.body.classList.contains("nav-open") : force;
+      document.body.classList.toggle("nav-open", open);
+    }
+    document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+      showTab(t.dataset.tab);
+      if(window.innerWidth <= 850) document.body.classList.remove("nav-open");
+    });
 
     let playlist = [];
     let dragI = null;
